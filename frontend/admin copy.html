@@ -355,29 +355,28 @@
             <div id="edgeTTSConfig" class="tts-config active">
                 <div class="form-group">
                     <label>語言</label>
-                    <select id="edgeLanguage" onchange="updateVoiceOptions()">
+                    <select id="edgeLanguage">
                         <option value="zh-CN">中文（簡體）</option>
                         <option value="zh-TW">中文（繁體）</option>
                         <option value="en-US">英文（美國）</option>
-                        <option value="en-GB">英文（英國）</option>
                         <option value="ja-JP">日文</option>
                         <option value="ko-KR">韓文</option>
-                        <option value="es-ES">西班牙文</option>
-                        <option value="fr-FR">法文</option>
-                        <option value="de-DE">德文</option>
                     </select>
                 </div>
 
                 <div class="form-group">
                     <label>音色</label>
                     <select id="edgeVoice">
-                        <!-- 動態載入 -->
+                        <option value="XiaoyiNeural">曉伊 (女)</option>
+                        <option value="YunxiNeural">雲希 (男)</option>
+                        <option value="XiaoxiaoNeural">曉曉 (女)</option>
+                        <option value="YunyangNeural">雲揚 (男)</option>
                     </select>
                 </div>
 
                 <div class="form-group">
                     <label>語速: <span id="rateValue">1.0</span>x</label>
-                    <input type="range" id="edgeRate" min="0.5" max="2.0" step="0.1" value="1.0"
+                    <input type="range" id="edgeRate" min="0.5" max="2.0" step="0.1" value="1.0" 
                            oninput="document.getElementById('rateValue').textContent = this.value">
                 </div>
             </div>
@@ -463,6 +462,11 @@
                     <button class="btn btn-warning" onclick="resetFacialExpression()">😐 重置口型</button>
                     <button class="btn btn-secondary" onclick="clearTest()">🗑️ 清空文字</button>
                 </div>
+                
+                <div id="ttsStatus" style="margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 6px; display: none;">
+                    <div id="statusText"></div>
+                    <div id="chunksPreview" style="margin-top: 8px; font-size: 12px; color: #666;"></div>
+                </div>
             </div>
 
             <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px;">
@@ -492,161 +496,6 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
     <script>
         let selectedExpression = null;
         let currentConfig = null;
-
-        // ============= Edge TTS 語音選項數據 =============
-        const edgeTTSVoices = {
-            'zh-CN': [
-                { value: 'XiaoyiNeural', label: '曉伊 (女性 - 溫柔)', gender: '女' },
-                { value: 'YunxiNeural', label: '雲希 (男性 - 年輕)', gender: '男' },
-                { value: 'XiaoxiaoNeural', label: '曉曉 (女性 - 活潑)', gender: '女' },
-                { value: 'YunyangNeural', label: '雲揚 (男性 - 專業)', gender: '男' },
-                { value: 'XiaochenNeural', label: '曉辰 (女性 - 親切)', gender: '女' },
-                { value: 'XiaohanNeural', label: '曉涵 (女性 - 穩重)', gender: '女' },
-                { value: 'XiaomoNeural', label: '曉墨 (女性 - 知性)', gender: '女' },
-                { value: 'XiaoqiuNeural', label: '曉秋 (女性 - 成熟)', gender: '女' },
-                { value: 'XiaoxuanNeural', label: '曉萱 (女性 - 溫和)', gender: '女' },
-                { value: 'XiaoyanNeural', label: '曉妍 (女性)', gender: '女' },
-                { value: 'XiaozhenNeural', label: '曉甄 (女性)', gender: '女' },
-                { value: 'YunjianNeural', label: '雲健 (男性 - 有力)', gender: '男' },
-                { value: 'YunxiaNeural', label: '雲霞 (男性)', gender: '男' }
-            ],
-            'zh-TW': [
-                { value: 'HsiaoChenNeural', label: '曉臻 (女性)', gender: '女' },
-                { value: 'HsiaoYuNeural', label: '曉雨 (女性)', gender: '女' },
-                { value: 'YunJheNeural', label: '雲哲 (男性)', gender: '男' }
-            ],
-            'en-US': [
-                { value: 'JennyNeural', label: 'Jenny (女性 - 通用)', gender: '女' },
-                { value: 'AriaNeural', label: 'Aria (女性 - 自然)', gender: '女' },
-                { value: 'GuyNeural', label: 'Guy (男性 - 專業)', gender: '男' },
-                { value: 'DavisNeural', label: 'Davis (男性 - 年輕)', gender: '男' },
-                { value: 'AmberNeural', label: 'Amber (女性)', gender: '女' },
-                { value: 'AnaNeural', label: 'Ana (女性 - 兒童)', gender: '女' },
-                { value: 'AshleyNeural', label: 'Ashley (女性)', gender: '女' },
-                { value: 'BrandonNeural', label: 'Brandon (男性)', gender: '男' },
-                { value: 'ChristopherNeural', label: 'Christopher (男性)', gender: '男' },
-                { value: 'CoraNeural', label: 'Cora (女性)', gender: '女' },
-                { value: 'ElizabethNeural', label: 'Elizabeth (女性)', gender: '女' },
-                { value: 'EricNeural', label: 'Eric (男性)', gender: '男' },
-                { value: 'JacobNeural', label: 'Jacob (男性)', gender: '男' },
-                { value: 'MichelleNeural', label: 'Michelle (女性)', gender: '女' },
-                { value: 'MonicaNeural', label: 'Monica (女性)', gender: '女' },
-                { value: 'SaraNeural', label: 'Sara (女性)', gender: '女' }
-            ],
-            'en-GB': [
-                { value: 'SoniaNeural', label: 'Sonia (女性)', gender: '女' },
-                { value: 'RyanNeural', label: 'Ryan (男性)', gender: '男' },
-                { value: 'LibbyNeural', label: 'Libby (女性)', gender: '女' },
-                { value: 'AbbiNeural', label: 'Abbi (女性)', gender: '女' },
-                { value: 'AlfieNeural', label: 'Alfie (男性)', gender: '男' },
-                { value: 'BellaNeural', label: 'Bella (女性)', gender: '女' },
-                { value: 'ElliotNeural', label: 'Elliot (男性)', gender: '男' },
-                { value: 'EthanNeural', label: 'Ethan (男性)', gender: '男' },
-                { value: 'HollieNeural', label: 'Hollie (女性)', gender: '女' },
-                { value: 'MaisieNeural', label: 'Maisie (女性 - 兒童)', gender: '女' },
-                { value: 'NoahNeural', label: 'Noah (男性)', gender: '男' },
-                { value: 'OliverNeural', label: 'Oliver (男性)', gender: '男' },
-                { value: 'OliviaNeural', label: 'Olivia (女性)', gender: '女' },
-                { value: 'ThomasNeural', label: 'Thomas (男性)', gender: '男' }
-            ],
-            'ja-JP': [
-                { value: 'NanamiNeural', label: 'Nanami 七海 (女性)', gender: '女' },
-                { value: 'KeitaNeural', label: 'Keita 圭太 (男性)', gender: '男' },
-                { value: 'AoiNeural', label: 'Aoi 葵 (女性)', gender: '女' },
-                { value: 'DaichiNeural', label: 'Daichi 大地 (男性)', gender: '男' },
-                { value: 'MayuNeural', label: 'Mayu 真夕 (女性)', gender: '女' },
-                { value: 'NaokiNeural', label: 'Naoki 直紀 (男性)', gender: '男' },
-                { value: 'ShioriNeural', label: 'Shiori 詩織 (女性)', gender: '女' }
-            ],
-            'ko-KR': [
-                { value: 'SunHiNeural', label: 'SunHi 선히 (女性)', gender: '女' },
-                { value: 'InJoonNeural', label: 'InJoon 인준 (男性)', gender: '男' },
-                { value: 'BongJinNeural', label: 'BongJin 봉진 (男性)', gender: '男' },
-                { value: 'GookMinNeural', label: 'GookMin 국민 (男性)', gender: '男' },
-                { value: 'JiMinNeural', label: 'JiMin 지민 (女性)', gender: '女' },
-                { value: 'SeoHyeonNeural', label: 'SeoHyeon 서현 (女性)', gender: '女' },
-                { value: 'SoonBokNeural', label: 'SoonBok 순복 (女性)', gender: '女' },
-                { value: 'YuJinNeural', label: 'YuJin 유진 (女性)', gender: '女' }
-            ],
-            'es-ES': [
-                { value: 'ElviraNeural', label: 'Elvira (女性)', gender: '女' },
-                { value: 'AlvaroNeural', label: 'Alvaro (男性)', gender: '男' },
-                { value: 'AbrilNeural', label: 'Abril (女性)', gender: '女' },
-                { value: 'ArnauNeural', label: 'Arnau (男性)', gender: '男' },
-                { value: 'DarioNeural', label: 'Dario (男性)', gender: '男' },
-                { value: 'EliasNeural', label: 'Elias (男性)', gender: '男' },
-                { value: 'EstrellaNeural', label: 'Estrella (女性)', gender: '女' },
-                { value: 'IreneNeural', label: 'Irene (女性)', gender: '女' },
-                { value: 'LaiaNeural', label: 'Laia (女性)', gender: '女' },
-                { value: 'LiaNeural', label: 'Lia (女性)', gender: '女' },
-                { value: 'NilNeural', label: 'Nil (男性)', gender: '男' },
-                { value: 'SaulNeural', label: 'Saul (男性)', gender: '男' },
-                { value: 'TeoNeural', label: 'Teo (男性)', gender: '男' },
-                { value: 'TrianaNeural', label: 'Triana (女性)', gender: '女' },
-                { value: 'VeraNeural', label: 'Vera (女性)', gender: '女' }
-            ],
-            'fr-FR': [
-                { value: 'DeniseNeural', label: 'Denise (女性)', gender: '女' },
-                { value: 'HenriNeural', label: 'Henri (男性)', gender: '男' },
-                { value: 'AlainNeural', label: 'Alain (男性)', gender: '男' },
-                { value: 'BrigitteNeural', label: 'Brigitte (女性)', gender: '女' },
-                { value: 'CelesteNeural', label: 'Celeste (女性)', gender: '女' },
-                { value: 'ClaudeNeural', label: 'Claude (男性)', gender: '男' },
-                { value: 'CoralieNeural', label: 'Coralie (女性)', gender: '女' },
-                { value: 'EloiseNeural', label: 'Eloise (女性 - 兒童)', gender: '女' },
-                { value: 'JacquelineNeural', label: 'Jacqueline (女性)', gender: '女' },
-                { value: 'JeromeNeural', label: 'Jerome (男性)', gender: '男' },
-                { value: 'JosephineNeural', label: 'Josephine (女性)', gender: '女' },
-                { value: 'MauriceNeural', label: 'Maurice (男性)', gender: '男' },
-                { value: 'YvesNeural', label: 'Yves (男性)', gender: '男' },
-                { value: 'YvetteNeural', label: 'Yvette (女性)', gender: '女' }
-            ],
-            'de-DE': [
-                { value: 'KatjaNeural', label: 'Katja (女性)', gender: '女' },
-                { value: 'ConradNeural', label: 'Conrad (男性)', gender: '男' },
-                { value: 'AmalaNeural', label: 'Amala (女性)', gender: '女' },
-                { value: 'BerndNeural', label: 'Bernd (男性)', gender: '男' },
-                { value: 'ChristophNeural', label: 'Christoph (男性)', gender: '男' },
-                { value: 'ElkeNeural', label: 'Elke (女性)', gender: '女' },
-                { value: 'GiselaNeural', label: 'Gisela (女性 - 兒童)', gender: '女' },
-                { value: 'KasperNeural', label: 'Kasper (男性)', gender: '男' },
-                { value: 'KillianNeural', label: 'Killian (男性)', gender: '男' },
-                { value: 'KlarissaNeural', label: 'Klarissa (女性)', gender: '女' },
-                { value: 'KlausNeural', label: 'Klaus (男性)', gender: '男' },
-                { value: 'LouisaNeural', label: 'Louisa (女性)', gender: '女' },
-                { value: 'MajaNeural', label: 'Maja (女性)', gender: '女' },
-                { value: 'RalfNeural', label: 'Ralf (男性)', gender: '男' },
-                { value: 'TanjaNeural', label: 'Tanja (女性)', gender: '女' }
-            ]
-        };
-
-        // ============= 更新語音選項 =============
-        function updateVoiceOptions() {
-            const language = document.getElementById('edgeLanguage').value;
-            const voiceSelect = document.getElementById('edgeVoice');
-            const voices = edgeTTSVoices[language] || [];
-
-            // 清空並重新填充選項
-            voiceSelect.innerHTML = '';
-
-            voices.forEach(voice => {
-                const option = document.createElement('option');
-                option.value = voice.value;
-                option.textContent = voice.label;
-                voiceSelect.appendChild(option);
-            });
-
-            // 如果有保存的配置，嘗試恢復選擇
-            if (currentConfig && currentConfig.edgetts) {
-                const savedVoice = currentConfig.edgetts.voice;
-                const voiceExists = voices.some(v => v.value === savedVoice);
-                if (voiceExists) {
-                    voiceSelect.value = savedVoice;
-                }
-            }
-
-            console.log(`已更新語音選項: ${language}, ${voices.length} 個選項`);
-        }
 
         // ============= 初始化 =============
         async function init() {
@@ -750,27 +599,19 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             try {
                 const response = await fetch('/api/tts/config');
                 currentConfig = await response.json();
-
+                
                 // 設定引擎
                 document.getElementById('ttsEngine').value = currentConfig.engine;
                 switchTTSEngine(currentConfig.engine);
-
+                
                 // Edge TTS
                 if (currentConfig.edgetts) {
                     document.getElementById('edgeLanguage').value = currentConfig.edgetts.language;
-
-                    // 先更新語音選項（根據語言）
-                    updateVoiceOptions();
-
-                    // 然後設置選中的語音
                     document.getElementById('edgeVoice').value = currentConfig.edgetts.voice;
                     document.getElementById('edgeRate').value = currentConfig.edgetts.rate;
                     document.getElementById('rateValue').textContent = currentConfig.edgetts.rate;
-                } else {
-                    // 如果沒有配置，使用默認值並初始化
-                    updateVoiceOptions();
                 }
-
+                
                 // Index TTS
                 if (currentConfig.indextts) {
                     document.getElementById('indexServerUrl').value = currentConfig.indextts.server_url;
@@ -920,25 +761,24 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
         let currentPlayingItem = null; // 當前播放項目
         let queueIdCounter = 0;        // 隊列ID計數器
 
-        // ============= 測試播放 =============
         async function testSpeak() {
             const text = document.getElementById('testText').value.trim();
-
+            
             if (!text) {
                 showAlert('請輸入要說的內容', 'error');
                 return;
             }
-
+            
             const engine = document.getElementById('ttsEngine').value;
-
+            
             // 前端分段
             const textChunks = splitTextIntoChunks(text);
-
+            
             if (textChunks.length === 0) {
                 showAlert('沒有有效的文字內容', 'error');
                 return;
             }
-
+            
             // 創建播放任務並加入隊列
             const playTask = {
                 id: ++queueIdCounter,
@@ -947,17 +787,19 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 expression: selectedExpression,
                 timestamp: Date.now()
             };
-
+            
             // 加入隊列
             audioQueue.push(playTask);
             console.log(`播放任務已加入隊列 (ID: ${playTask.id}), 隊列長度: ${audioQueue.length}`);
-
-            // 顯示成功訊息
-            showAlert(`✅ 已加入播放隊列 (${textChunks.length} 個片段)`, 'success');
-
+            
+            // 顯示隊列狀態
+            updateQueueStatus();
+            
             // 如果當前沒有在播放，立即開始播放
             if (!isAudioPlaying) {
                 await startPlayingQueue();
+            } else {
+                showAlert(`📋 已加入播放隊列，當前排隊位置: ${audioQueue.length}`, 'success');
             }
         }
 
@@ -966,12 +808,17 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             if (audioQueue.length === 0 || isAudioPlaying) {
                 return;
             }
-
+            
             isAudioPlaying = true;
             currentPlayingItem = audioQueue.shift(); // 從隊列中取出第一個任務
-
+            
             console.log(`開始播放任務 ID: ${currentPlayingItem.id}, 包含 ${currentPlayingItem.chunks.length} 個片段`);
-
+            
+            // 顯示播放狀態
+            updateQueueStatus();
+            showTTSStatus(`🎵 開始播放任務 (${currentPlayingItem.chunks.length} 個片段)`, 
+                         `片段預覽: ${currentPlayingItem.chunks.slice(0, 3).join(' | ')}${currentPlayingItem.chunks.length > 3 ? '...' : ''}`);
+            
             try {
                 await playTaskChunks(currentPlayingItem);
             } catch (error) {
@@ -981,73 +828,234 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 // 任務完成，重置狀態
                 isAudioPlaying = false;
                 currentPlayingItem = null;
-
+                updateQueueStatus();
+                
                 // 如果隊列中還有任務，繼續播放
                 if (audioQueue.length > 0) {
                     setTimeout(() => startPlayingQueue(), 500); // 稍微延遲後開始下一個任務
+                } else {
+                    showTTSStatus('🏁 所有播放任務完成！', '隊列已清空');
+                    setTimeout(() => hideTTSStatus(), 3000);
                 }
             }
         }
 
         async function playTaskChunks(task) {
-            // 逐個發送片段到後端
-            for (let i = 0; i < task.chunks.length; i++) {
-                const chunk = task.chunks[i];
+            // 初始化任務的播放狀態
+            task.currentChunk = 0;
+            task.isPlaying = false;
+            task.audioChunks = [];
+            task.ttsChunks = task.chunks; // 使用任務的片段
+            task.ttsQueue = new Set();
 
-                console.log(`播放任務 ${task.id} 的第 ${i + 1}/${task.chunks.length} 段: ${chunk.substring(0, 30)}...`);
+            // 啟動TTS處理和播放監控（基於原版）
+            await Promise.all([
+                startTaskTTSProcess(task),
+                startTaskAudioPlayback(task)
+            ]);
+        }
+
+        // 基於原版：任務TTS處理進程
+        async function startTaskTTSProcess(task) {
+            let max_concurrency = 3;
+            let nextIndex = 0;
+            
+            while (isAudioPlaying && nextIndex < task.ttsChunks.length) {
+                while (task.ttsQueue.size < max_concurrency && nextIndex < task.ttsChunks.length) {
+                    if (!isAudioPlaying) break;
+                    
+                    const index = nextIndex++;
+                    task.ttsQueue.add(index);
+                    
+                    processTaskTTSChunk(task, index).finally(() => {
+                        task.ttsQueue.delete(index);
+                    });
+                    
+                    if (index === 0) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, 10));
+            }
+            console.log(`Task ${task.id} TTS processing completed`);
+        }
+
+        // 基於原版：處理任務TTS片段
+        async function processTaskTTSChunk(task, index) {
+            const chunk = task.ttsChunks[index];
+            
+            console.log(`Processing task ${task.id} chunk ${index}:`, chunk.substring(0, 30));
+            
+            try {
+                const response = await fetch('/api/speak', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        text: chunk, 
+                        engine: task.engine,
+                        expression: task.expression
+                    })
+                });
+                
+                if (response.ok) {
+                    const audioBlob = await response.blob();
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    
+                    task.audioChunks[index] = { 
+                        url: audioUrl, 
+                        text: chunk,
+                        index: index
+                    };
+                    
+                    console.log(`Task ${task.id} chunk ${index} processed`);
+                } else {
+                    console.error(`TTS failed for task ${task.id} chunk ${index}`);
+                    task.audioChunks[index] = null;
+                }
+            } catch (error) {
+                console.error(`Error processing task ${task.id} chunk ${index}:`, error);
+                task.audioChunks[index] = null;
+            }
+        }
+
+        // 基於原版：任務音頻播放監控（修改为不播放音频，仅等待）
+        async function startTaskAudioPlayback(task) {
+            while (isAudioPlaying && task.currentChunk < task.ttsChunks.length) {
+                const audioChunk = task.audioChunks[task.currentChunk];
+
+                if (!audioChunk) {
+                    // 等待TTS生成
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    continue;
+                }
+
+                if (!audioChunk.url) {
+                    // TTS失敗，跳過
+                    task.currentChunk++;
+                    continue;
+                }
+
+                // 更新狀態顯示
+                showTTSStatus(`📡 已發送任務 ${task.id} - 第 ${task.currentChunk + 1}/${task.ttsChunks.length} 段到 VRM`,
+                             `當前內容: ${audioChunk.text.substring(0, 30)}${audioChunk.text.length > 30 ? '...' : ''}${audioQueue.length > 0 ? ` | 隊列等待: ${audioQueue.length}` : ''}`);
+
+                task.isPlaying = true;
+                console.log(`✅ Task ${task.id} chunk ${task.currentChunk} sent to VRM via WebSocket`);
+
+                // 🔧 移除本地音频播放 - 音频已通过 WebSocket 发送到 vrm.html
+                // 后端的 /api/speak 会自动通过 broadcast_to_vrm() 发送音频
+                // 这里只需要清理资源并等待一小段时间让 VRM 播放
 
                 try {
-                    const response = await fetch('/api/speak', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            text: chunk,
-                            engine: task.engine,
-                            expression: task.expression
-                        })
-                    });
+                    // 清理本地 blob URL（我们不再需要它）
+                    URL.revokeObjectURL(audioChunk.url);
 
-                    if (!response.ok) {
-                        const error = await response.json();
-                        throw new Error(error.detail || '播放失敗');
-                    }
-
-                    // 等待一小段時間讓 VRM 播放
+                    // 等待一小段时间，模拟播放间隔（可以根据实际情况调整）
+                    // 这个时间应该足够让 VRM 接收并开始播放
                     await new Promise(resolve => setTimeout(resolve, 500));
 
                 } catch (error) {
-                    console.error(`播放第 ${i + 1} 段失敗:`, error);
-                    throw error;
+                    console.error(`Error in chunk handling: ${error}`);
+                } finally {
+                    task.currentChunk++;
+                    task.isPlaying = false;
                 }
             }
 
-            console.log(`✅ 任務 ${task.id} 所有片段已發送完成`);
+            console.log(`✅ Task ${task.id} all chunks sent to VRM`);
         }
 
-        // 中斷播放
-        async function interruptTTS() {
-            try {
-                // 1. 清空前端播放隊列
-                audioQueue = [];
-                isAudioPlaying = false;
-                currentPlayingItem = null;
+        // 輔助函數
+        function getCurrentEngine() {
+            return document.getElementById('ttsEngine').value || 'edgetts';
+        }
 
-                // 2. 通知後端重置表情（這也會停止 VRM 的音頻播放）
-                const response = await fetch('/api/reset-expression', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
+        // 全局變量
+        let currentAudio = null; // 當前播放的音頻對象
 
-                if (response.ok) {
-                    showAlert('🛑 播放已中斷，隊列已清空', 'success');
-                    console.log('✅ 音頻播放和隊列已全部清除');
-                } else {
-                    // 即使後端失敗，前端隊列也已清空
-                    showAlert('⚠️ 前端隊列已清空，但重置表情失敗', 'error');
+        function updateQueueStatus() {
+            if (isAudioPlaying && currentPlayingItem) {
+                const queueInfo = audioQueue.length > 0 ? ` (隊列等待: ${audioQueue.length})` : '';
+                showTTSStatus(`🎵 正在播放任務 ${currentPlayingItem.id}${queueInfo}`, 
+                             `共 ${currentPlayingItem.chunks.length} 個片段`);
+            } else if (audioQueue.length > 0) {
+                showTTSStatus(`📋 隊列中有 ${audioQueue.length} 個任務等待播放`, '點擊中斷可清空隊列');
+            }
+        }
+
+        function clearAudioQueue() {
+            audioQueue = [];
+            isAudioPlaying = false;
+            currentPlayingItem = null;
+            hideTTSStatus();
+            console.log('音頻隊列已清空');
+        }
+
+        // ============= TTS 狀態監控 =============
+        let statusMonitorInterval = null;
+
+        async function monitorTTSStatus() {
+            if (statusMonitorInterval) {
+                clearInterval(statusMonitorInterval);
+            }
+            
+            statusMonitorInterval = setInterval(async () => {
+                try {
+                    const response = await fetch('/api/tts/status');
+                    const status = await response.json();
+                    
+                    if (status.is_running) {
+                        const progress = status.current_play_index + 1;
+                        const total = status.total_chunks;
+                        const completed = status.completed_chunks;
+                        
+                        showTTSStatus(
+                            `🎵 正在播放第 ${progress}/${total} 段 (已完成: ${completed})`,
+                            `處理任務: ${status.processing_tasks} | 平均處理時間: ${(status.stats.processing_time / Math.max(status.stats.total_processed, 1)).toFixed(2)}s`
+                        );
+                    } else if (status.current_play_index >= status.total_chunks && status.total_chunks > 0) {
+                        showTTSStatus('🏁 播放完成！', '所有音頻片段已播放完畢');
+                        setTimeout(() => {
+                            hideTTSStatus();
+                            clearInterval(statusMonitorInterval);
+                        }, 3000);
+                    }
+                } catch (error) {
+                    console.error('監控狀態失敗:', error);
                 }
-            } catch (error) {
-                console.error('中斷播放失敗:', error);
-                showAlert('❌ 中斷失敗: ' + error.message, 'error');
+            }, 1000);
+        }
+
+        function showTTSStatus(mainText, subText) {
+            const statusDiv = document.getElementById('ttsStatus');
+            const statusTextDiv = document.getElementById('statusText');
+            const chunksPreviewDiv = document.getElementById('chunksPreview');
+            
+            statusTextDiv.textContent = mainText;
+            chunksPreviewDiv.textContent = subText;
+            statusDiv.style.display = 'block';
+        }
+
+        function hideTTSStatus() {
+            document.getElementById('ttsStatus').style.display = 'none';
+            if (statusMonitorInterval) {
+                clearInterval(statusMonitorInterval);
+                statusMonitorInterval = null;
+            }
+        }
+
+        // ============= 中斷 TTS =============
+        function interruptTTS() {
+            if (isAudioPlaying || audioQueue.length > 0) {
+                clearAudioQueue();
+                const message = isAudioPlaying ? 
+                    '🛑 當前播放已中斷，隊列已清空' : 
+                    '🛑 播放隊列已清空';
+                showAlert(message, 'success');
+                console.log('音頻播放和隊列已全部清除');
+            } else {
+                showAlert('當前沒有播放任務需要中斷', 'error');
             }
         }
 

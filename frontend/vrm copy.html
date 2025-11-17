@@ -14,7 +14,7 @@
         body {
             font-family: 'Arial', sans-serif;
             overflow: hidden;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: white;
         }
 
         #canvas-container {
@@ -547,191 +547,170 @@
                     console.log('🔊 [DEBUG] Audio data length:', audioBase64.length);
                     console.log('🔊 [DEBUG] MIME type:', mimeType);
 
-                // 初始化 AudioContext
-                if (!audioContext) {
-                    console.log('🔊 [DEBUG] Creating new AudioContext...');
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                }
-
-                // 檢查 AudioContext 狀態
-                if (audioContext.state === 'suspended') {
-                    console.log('🔊 [DEBUG] AudioContext was suspended, resuming...');
-                    await audioContext.resume();
-                }
-
-                // 停止當前音訊
-                if (currentAudio) {
-                    console.log('🔊 [DEBUG] Stopping previous audio...');
-                    currentAudio.pause();
-                    currentAudio.currentTime = 0;
-                    currentAudio = null;
-                }
-
-                // 解碼 base64
-                console.log('🔊 [DEBUG] Decoding base64 audio data...');
-                const audioBytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
-                const audioBlob = new Blob([audioBytes], { type: mimeType });
-                const audioUrl = URL.createObjectURL(audioBlob);
-                console.log('🔊 [DEBUG] Created audio URL:', audioUrl);
-
-                // 創建音訊元素
-                const audio = new Audio(audioUrl);
-                currentAudio = audio;
-
-                // 設置音訊屬性
-                audio.volume = 1.0;
-                audio.preload = 'auto';
-
-                // 🔧 修復：檢查AudioContext是否已經連接過
-                let source, analyser;
-                try {
-                    console.log('🔊 [DEBUG] Creating MediaElementSource...');
-                    source = audioContext.createMediaElementSource(audio);
-                    analyser = audioContext.createAnalyser();
-                    analyser.fftSize = 256;
-                    analyser.smoothingTimeConstant = 0.8;
-
-                    source.connect(analyser);
-                    analyser.connect(audioContext.destination);
-                    console.log('🔊 [DEBUG] Audio pipeline connected successfully');
-                } catch (sourceError) {
-                    console.error('🔊 [ERROR] Failed to create audio source:', sourceError);
-                    // 如果AudioContext連接失敗，直接播放音頻（無口型同步）
-                    analyser = null;
-                    console.log('🔊 [DEBUG] Falling back to direct audio playback');
-                }
-
-                const bufferLength = analyser ? analyser.frequencyBinCount : 0;
-                const dataArray = analyser ? new Uint8Array(bufferLength) : null;
-
-                frameCount = 0;
-
-                // 口型同步動畫
-                const animateLipSync = () => {
-                    if (audio.paused || audio.ended) {
-                        console.log('🔊 [DEBUG] Audio ended, resetting expressions...');
-                        // 播放結束，重置口型但保持其他表情
-                        if (currentVrm && currentVrm.expressionManager) {
-                            currentVrm.expressionManager.setValue('aa', 0);
-                            currentVrm.expressionManager.setValue('ih', 0);
-                            
-                            // 保持當前表情一段時間
-                            setTimeout(() => {
-                                if (currentVrm && currentVrm.expressionManager) {
-                                    ['happy', 'angry', 'sad', 'surprised', 'relaxed'].forEach(exp => {
-                                        currentVrm.expressionManager.setValue(exp, 0);
-                                    });
-                                }
-                            }, 2000);
-                        }
-                        return;
+                    // 初始化 AudioContext
+                    if (!audioContext) {
+                        console.log('🔊 [DEBUG] Creating new AudioContext...');
+                        audioContext = new (window.AudioContext || window.webkitAudioContext)();
                     }
 
-                    frameCount++;
-                    
-                    // 🔧 修復：檢查analyser是否存在
-                    let intensity = 0;
-                    if (analyser && dataArray) {
-                        try {
-                            analyser.getByteFrequencyData(dataArray);
-                            
-                            // 計算音量（僅使用中低頻）
-                            const relevantData = dataArray.slice(0, Math.floor(bufferLength / 2));
-                            const sum = relevantData.reduce((a, b) => a + b, 0);
-                            const average = sum / relevantData.length;
-                            intensity = Math.min(average / 128, 1.0);
-                        } catch (analyserError) {
-                            console.error('🔊 [ERROR] Audio analysis failed:', analyserError);
-                            intensity = 0;
-                        }
-                    } else {
-                        // 如果沒有analyser，使用基本的時間驅動口型動畫
-                        intensity = Math.sin(frameCount * 0.2) * 0.3 + 0.3; // 基本口型動畫
+                    // 檢查 AudioContext 狀態
+                    if (audioContext.state === 'suspended') {
+                        console.log('🔊 [DEBUG] AudioContext was suspended, resuming...');
+                        await audioContext.resume();
                     }
 
-                    // 驅動口型 - 大幅降低強度
-                    if (currentVrm && currentVrm.expressionManager && intensity > 0.3) {
-                        let maxMouthOpen = 0.4; // 大幅降低最大張嘴
-                        
-                        // 根據當前表情調整口型強度
-                        if (currentExpression) {
-                            if (['happy', 'surprised'].includes(currentExpression)) {
-                                maxMouthOpen = 0.3; // 開心和驚訝表情時進一步降低
-                            } else if (['angry', 'sad'].includes(currentExpression)) {
-                                maxMouthOpen = 0.12;
+                    // 🔧 移除强制停止逻辑 - 现在使用队列机制，不再需要中断当前音频
+                    // 如果有正在播放的音频，队列会确保它播放完成后再播放下一个
+
+                    // 解碼 base64
+                    console.log('🔊 [DEBUG] Decoding base64 audio data...');
+                    const audioBytes = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
+                    const audioBlob = new Blob([audioBytes], { type: mimeType });
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    console.log('🔊 [DEBUG] Created audio URL:', audioUrl);
+
+                    // 創建音訊元素
+                    const audio = new Audio(audioUrl);
+                    currentAudio = audio;
+
+                    // 設置音訊屬性
+                    audio.volume = 1.0;
+                    audio.preload = 'auto';
+
+                    // 🔧 不使用 AudioContext 的频谱分析，避免 MediaElementSource 重复创建问题
+                    // 改为基于时间的简单口型同步
+                    let analyser = null;  // 不使用频谱分析
+
+                    const bufferLength = analyser ? analyser.frequencyBinCount : 0;
+                    const dataArray = analyser ? new Uint8Array(bufferLength) : null;
+
+                    frameCount = 0;
+
+                    // 口型同步動畫
+                    const animateLipSync = () => {
+                        if (audio.paused || audio.ended) {
+                            console.log('🔊 [DEBUG] Audio ended, resetting expressions...');
+                            // 播放結束，重置口型但保持其他表情
+                            if (currentVrm && currentVrm.expressionManager) {
+                                currentVrm.expressionManager.setValue('aa', 0);
+                                currentVrm.expressionManager.setValue('ih', 0);
+
+                                // 保持當前表情一段時間
+                                setTimeout(() => {
+                                    if (currentVrm && currentVrm.expressionManager) {
+                                        ['happy', 'angry', 'sad', 'surprised', 'relaxed'].forEach(exp => {
+                                            currentVrm.expressionManager.setValue(exp, 0);
+                                        });
+                                    }
+                                }, 2000);
                             }
-                            
-                            // 保持當前表情
-                            currentVrm.expressionManager.setValue(currentExpression, 1.0);
+                            return;
                         }
-                        
-                        const mouthOpen = Math.min(intensity * 0.3, maxMouthOpen); // 大幅降低強度係數
-                        currentVrm.expressionManager.setValue('aa', mouthOpen);
-                        
-                        // 添加細微的口型變化
-                        const variation = Math.sin(frameCount * 0.1) * 0.02;
-                        const ihValue = Math.min(Math.max(0, mouthOpen * 0.2 + variation), maxMouthOpen * 0.5);
-                        currentVrm.expressionManager.setValue('ih', ihValue);
-                    } else if (currentVrm && currentVrm.expressionManager) {
-                        // 平滑閉嘴
-                        const currentAA = currentVrm.expressionManager.getValue?.('aa') || 0;
-                        const currentIH = currentVrm.expressionManager.getValue?.('ih') || 0;
-                        currentVrm.expressionManager.setValue('aa', Math.max(0, currentAA * 0.7 - 0.01));
-                        currentVrm.expressionManager.setValue('ih', Math.max(0, currentIH * 0.6 - 0.005));
-                        
-                        // 保持其他表情
-                        if (currentExpression) {
-                            currentVrm.expressionManager.setValue(currentExpression, 1.0);
+
+                        frameCount++;
+
+                        // 🔧 修復：檢查analyser是否存在
+                        let intensity = 0;
+                        if (analyser && dataArray) {
+                            try {
+                                analyser.getByteFrequencyData(dataArray);
+
+                                // 計算音量（僅使用中低頻）
+                                const relevantData = dataArray.slice(0, Math.floor(bufferLength / 2));
+                                const sum = relevantData.reduce((a, b) => a + b, 0);
+                                const average = sum / relevantData.length;
+                                intensity = Math.min(average / 128, 1.0);
+                            } catch (analyserError) {
+                                console.error('🔊 [ERROR] Audio analysis failed:', analyserError);
+                                intensity = 0;
+                            }
+                        } else {
+                            // 如果沒有analyser，使用基本的時間驅動口型動畫
+                            intensity = Math.sin(frameCount * 0.2) * 0.3 + 0.3; // 基本口型動畫
                         }
+
+                        // 驅動口型 - 大幅降低強度
+                        if (currentVrm && currentVrm.expressionManager && intensity > 0.3) {
+                            let maxMouthOpen = 0.4; // 大幅降低最大張嘴
+
+                            // 根據當前表情調整口型強度
+                            if (currentExpression) {
+                                if (['happy', 'surprised'].includes(currentExpression)) {
+                                    maxMouthOpen = 0.3; // 開心和驚訝表情時進一步降低
+                                } else if (['angry', 'sad'].includes(currentExpression)) {
+                                    maxMouthOpen = 0.12;
+                                }
+
+                                // 保持當前表情
+                                currentVrm.expressionManager.setValue(currentExpression, 1.0);
+                            }
+
+                            const mouthOpen = Math.min(intensity * 0.3, maxMouthOpen); // 大幅降低強度係數
+                            currentVrm.expressionManager.setValue('aa', mouthOpen);
+
+                            // 添加細微的口型變化
+                            const variation = Math.sin(frameCount * 0.1) * 0.02;
+                            const ihValue = Math.min(Math.max(0, mouthOpen * 0.2 + variation), maxMouthOpen * 0.5);
+                            currentVrm.expressionManager.setValue('ih', ihValue);
+                        } else if (currentVrm && currentVrm.expressionManager) {
+                            // 平滑閉嘴
+                            const currentAA = currentVrm.expressionManager.getValue?.('aa') || 0;
+                            const currentIH = currentVrm.expressionManager.getValue?.('ih') || 0;
+                            currentVrm.expressionManager.setValue('aa', Math.max(0, currentAA * 0.7 - 0.01));
+                            currentVrm.expressionManager.setValue('ih', Math.max(0, currentIH * 0.6 - 0.005));
+
+                            // 保持其他表情
+                            if (currentExpression) {
+                                currentVrm.expressionManager.setValue(currentExpression, 1.0);
+                            }
+                        }
+
+                        requestAnimationFrame(animateLipSync);
+                    };
+
+                    // 結束時隱藏字幕并 resolve Promise
+                    audio.onended = () => {
+                        console.log('🎵 [QUEUE] Audio playback completed');
+                        hideSubtitle();
+                        URL.revokeObjectURL(audioUrl);
+                        currentAudio = null;
+                        resolve(); // 通知播放完成
+                    };
+
+                    // 播放错误时也要 resolve，确保队列继续
+                    audio.onerror = (error) => {
+                        console.error('🔊 [ERROR] Audio playback error:', error);
+                        hideSubtitle();
+                        URL.revokeObjectURL(audioUrl);
+                        currentAudio = null;
+                        resolve(); // 即使出错也继续队列
+                    };
+
+                    // 🔧 修復：添加audio事件監聽器
+                    audio.addEventListener('loadstart', () => console.log('🔊 [DEBUG] Audio loading started...'));
+                    audio.addEventListener('loadeddata', () => console.log('🔊 [DEBUG] Audio data loaded'));
+                    audio.addEventListener('canplay', () => console.log('🔊 [DEBUG] Audio can start playing'));
+                    audio.addEventListener('play', () => console.log('🔊 [DEBUG] Audio playback started'));
+
+                    // 播放音頻
+                    console.log('🔊 [DEBUG] Starting audio playback...');
+                    const playPromise = audio.play();
+                    if (playPromise !== undefined) {
+                        playPromise
+                            .then(() => {
+                                console.log('🔊 [DEBUG] Audio playback started successfully');
+                                animateLipSync();
+                            })
+                            .catch(error => {
+                                console.error('🔊 [ERROR] Audio playback failed:', error);
+                                // 即使播放失敗，也要隱藏字幕并 resolve
+                                hideSubtitle();
+                                resolve();
+                            });
+                    } else {
+                        // 老版本瀏覽器
+                        animateLipSync();
                     }
-
-                    requestAnimationFrame(animateLipSync);
-                };
-
-                // 🔧 修復：添加audio事件監聽器
-                audio.addEventListener('loadstart', () => console.log('🔊 [DEBUG] Audio loading started...'));
-                audio.addEventListener('loadeddata', () => console.log('🔊 [DEBUG] Audio data loaded'));
-                audio.addEventListener('canplay', () => console.log('🔊 [DEBUG] Audio can start playing'));
-                audio.addEventListener('play', () => console.log('🔊 [DEBUG] Audio playback started'));
-                audio.addEventListener('error', (e) => console.error('🔊 [ERROR] Audio error:', e));
-
-                // 結束時隱藏字幕并 resolve Promise
-                audio.onended = () => {
-                    console.log('🎵 [QUEUE] Audio playback completed');
-                    hideSubtitle();
-                    URL.revokeObjectURL(audioUrl);
-                    currentAudio = null;
-                    resolve(); // 通知播放完成
-                };
-
-                // 播放错误时也要 resolve，确保队列继续
-                audio.onerror = (error) => {
-                    console.error('🔊 [ERROR] Audio playback error:', error);
-                    hideSubtitle();
-                    URL.revokeObjectURL(audioUrl);
-                    currentAudio = null;
-                    resolve(); // 即使出错也继续队列
-                };
-
-                // 播放音頻
-                console.log('🔊 [DEBUG] Starting audio playback...');
-                const playPromise = audio.play();
-                if (playPromise !== undefined) {
-                    playPromise
-                        .then(() => {
-                            console.log('🔊 [DEBUG] Audio playback started successfully');
-                            animateLipSync();
-                        })
-                        .catch(error => {
-                            console.error('🔊 [ERROR] Audio playback failed:', error);
-                            // 即使播放失敗，也要隱藏字幕并 resolve
-                            hideSubtitle();
-                            resolve();
-                        });
-                } else {
-                    // 老版本瀏覽器
-                    animateLipSync();
-                }
 
                 } catch (error) {
                     console.error('Error playing audio:', error);
@@ -743,40 +722,27 @@
 
         // 重置所有表情的函數
         function resetAllExpressions() {
-            console.log('🔄 [RESET] Resetting all expressions and clearing audio queue');
-
-            // 1. 清空音頻播放隊列
-            audioQueue = [];
-            isPlayingAudio = false;
-            console.log('🎵 [QUEUE] Audio queue cleared');
-
-            // 2. 停止當前音訊
-            if (currentAudio) {
-                console.log('🔊 [AUDIO] Stopping current audio');
-                currentAudio.pause();
-                currentAudio.currentTime = 0;
-                currentAudio = null;
-            }
-
-            // 3. 隱藏字幕
-            hideSubtitle();
-
-            // 4. 重置表情管理器
             if (currentVrm && currentVrm.expressionManager) {
+                console.log('重置所有表情');
+                
+                // 停止當前音訊
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio = null;
+                }
+                
                 // 重置所有表情值
                 const allExpressions = ['aa', 'ih', 'happy', 'angry', 'sad', 'neutral', 'surprised', 'relaxed', 'blink'];
                 allExpressions.forEach(exp => {
                     currentVrm.expressionManager.setValue(exp, 0);
                 });
-
+                
                 currentExpression = null;
                 frameCount = 0;
-
-                console.log('✅ [RESET] Expression reset complete');
+                
+                console.log('表情重置完成');
                 return true;
             }
-
-            console.log('⚠️ [RESET] VRM not ready, queue cleared anyway');
             return false;
         }
 
@@ -1841,38 +1807,22 @@
                 console.log('場景初始化完成');
                 animate();
                 console.log('動畫循環已啟動');
-
+                
                 // 連接 WebSocket
                 connectWebSocket();
                 console.log('WebSocket 連接已建立');
-
-                // 從後端獲取當前選擇的 VRM
-                console.log('獲取當前選擇的 VRM...');
-                let vrmPath = '/vrm/Alice.vrm'; // 預設值
-                try {
-                    const response = await fetch('/api/vrm/current');
-                    if (response.ok) {
-                        const data = await response.json();
-                        vrmPath = data.path;
-                        console.log('從後端獲取到 VRM 路徑:', vrmPath);
-                    } else {
-                        console.warn('無法獲取當前 VRM，使用預設值');
-                    }
-                } catch (error) {
-                    console.warn('獲取當前 VRM 失敗，使用預設值:', error);
-                }
-
-                // 載入 VRM
-                console.log('開始載入 VRM:', vrmPath);
-                await loadVRM(vrmPath);
+                
+                // 載入預設 VRM
+                console.log('開始載入 VRM...');
+                await loadVRM('/vrm/Alice.vrm');
                 console.log('VRM 載入完成');
-
+                
                 // 隱藏載入畫面
                 loadingElement.style.display = 'none';
-
-                console.log('✅ Initialization complete');
+                
+                console.log('Initialization complete');
             } catch (error) {
-                console.error('❌ Initialization error:', error);
+                console.error('Initialization error:', error);
                 loadingElement.innerHTML = '<div class="spinner"></div><div>載入失敗: ' + error.message + '</div>';
             }
         }
