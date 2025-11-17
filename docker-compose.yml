@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  vrm-agent:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5456:5456"
+    volumes:
+      - ./frontend:/app/frontend
+      - ./vrm:/app/vrm
+      - ./data:/app/data
+      - vrm_uploads:/app/uploads
+    environment:
+      - ENV=production
+      - PORT=5456
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5456/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - vrm-network
+
+networks:
+  vrm-network:
+    driver: bridge
+
+volumes:
+  vrm_uploads:

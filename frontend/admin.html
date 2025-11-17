@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VRM Agent 管理後台</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 36px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 24px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .form-group select,
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group select:focus,
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .btn-warning:hover {
+            background: #e0a800;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(255, 193, 7, 0.4);
+        }
+
+        .vrm-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .vrm-item {
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .vrm-item:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .vrm-item.selected {
+            border-color: #667eea;
+            background: #e8eaff;
+        }
+
+        .vrm-item .vrm-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .vrm-item .vrm-type {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .upload-area {
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .upload-area:hover {
+            background: #f8f9ff;
+        }
+
+        .upload-area input[type="file"] {
+            display: none;
+        }
+
+        .tts-config {
+            display: none;
+        }
+
+        .tts-config.active {
+            display: block;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .test-panel {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .expression-selector {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+
+        .expression-btn {
+            padding: 8px 16px;
+            border: 2px solid #e0e0e0;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .expression-btn:hover {
+            border-color: #667eea;
+        }
+
+        .expression-btn.selected {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .alert {
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .alert.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert.show {
+            display: block;
+        }
+
+        .quick-links {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .quick-link {
+            padding: 12px 24px;
+            background: white;
+            color: #667eea;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.3s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .quick-link:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎭 VRM Agent 管理後台</h1>
+
+        <div class="quick-links">
+            <a href="/vrm.html" target="_blank" class="quick-link">🎬 開啟 VRM 顯示頁面</a>
+            <a href="/health" target="_blank" class="quick-link">💚 健康檢查</a>
+        </div>
+
+        <div id="alertBox" class="alert"></div>
+
+        <!-- VRM 管理 -->
+        <div class="card">
+            <h2>📦 VRM 模型管理</h2>
+            
+            <div class="form-group">
+                <label>當前選擇的模型</label>
+                <div id="currentVRM" style="padding: 12px; background: #f8f9fa; border-radius: 8px;">
+                    載入中...
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>上傳 VRM 檔案</label>
+                <div class="upload-area" onclick="document.getElementById('vrmFileInput').click()">
+                    <input type="file" id="vrmFileInput" accept=".vrm" onchange="uploadVRM(this)">
+                    <p>📤 點擊或拖曳 VRM 檔案到此處上傳</p>
+                    <p style="font-size: 12px; color: #666; margin-top: 10px;">支援 .vrm 格式</p>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>可用的 VRM 模型</label>
+                <div id="vrmList" class="vrm-list">
+                    載入中...
+                </div>
+            </div>
+        </div>
+
+        <!-- TTS 設定 -->
+        <div class="card">
+            <h2>🔊 TTS 語音設定</h2>
+            
+            <div class="form-group">
+                <label>TTS 引擎</label>
+                <select id="ttsEngine" onchange="switchTTSEngine(this.value)">
+                    <option value="edgetts">Edge TTS (微軟)</option>
+                    <option value="indextts">Index TTS</option>
+                </select>
+            </div>
+
+            <!-- Edge TTS 設定 -->
+            <div id="edgeTTSConfig" class="tts-config active">
+                <div class="form-group">
+                    <label>語言</label>
+                    <select id="edgeLanguage">
+                        <option value="zh-CN">中文（簡體）</option>
+                        <option value="zh-TW">中文（繁體）</option>
+                        <option value="en-US">英文（美國）</option>
+                        <option value="ja-JP">日文</option>
+                        <option value="ko-KR">韓文</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>音色</label>
+                    <select id="edgeVoice">
+                        <option value="XiaoyiNeural">曉伊 (女)</option>
+                        <option value="YunxiNeural">雲希 (男)</option>
+                        <option value="XiaoxiaoNeural">曉曉 (女)</option>
+                        <option value="YunyangNeural">雲揚 (男)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>語速: <span id="rateValue">1.0</span>x</label>
+                    <input type="range" id="edgeRate" min="0.5" max="2.0" step="0.1" value="1.0" 
+                           oninput="document.getElementById('rateValue').textContent = this.value">
+                </div>
+            </div>
+
+            <!-- Index TTS 設定 -->
+            <div id="indexTTSConfig" class="tts-config">
+                <div class="form-group">
+                    <label>伺服器地址</label>
+                    <input type="text" id="indexServerUrl" placeholder="http://10.9.0.35:8001">
+                </div>
+
+                <div class="form-group">
+                    <label>角色名稱</label>
+                    <input type="text" id="indexCharacter" placeholder="hayley">
+                </div>
+            </div>
+
+            <button class="btn btn-primary" onclick="saveTTSConfig()">💾 儲存 TTS 設定</button>
+        </div>
+
+        <!-- 動畫管理 -->
+        <div class="card">
+            <h2>🎭 動畫管理</h2>
+            
+            <div class="form-group">
+                <label>動畫輪播狀態</label>
+                <div style="background: #d4edda; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #c3e6cb;">
+                    <strong style="color: #155724;">✅ 自動輪播模式已啟用</strong>
+                    <div style="margin-top: 10px; font-size: 14px; color: #155724;">
+                        系統會自動輪播以下4個動畫：插腰、玩手指、撓頭、伸展
+                    </div>
+                    <div style="margin-top: 8px; font-size: 12px; color: #6c757d;">
+                        💡 動畫會隨機播放，無需手動選擇
+                    </div>
+                </div>
+            </div>
+
+            <!-- <div class="form-group">
+                <label>上傳 VRMA 動畫檔案</label>
+                <div class="upload-area" onclick="document.getElementById('animationFileInput').click()">
+                    <input type="file" id="animationFileInput" accept=".vrma" onchange="uploadAnimation(this)">
+                    <p>🎬 點擊或拖曳 VRMA 動畫檔案到此處上傳</p>
+                    <p style="font-size: 12px; color: #666; margin-top: 10px;">支援 .vrma 格式</p>
+                </div>
+            </div> -->
+        </div>
+
+        <!-- 測試控制台 -->
+        <div class="card">
+            <h2>🎮 測試控制台</h2>
+            
+            <div class="test-panel">
+                <div class="form-group">
+                    <label>要說的內容</label>
+                    <textarea id="testText" placeholder="輸入要讓 VRM 說的內容...&#10;例如：你好，我是虛擬助手！">你好，我是虛擬助手！</textarea>
+                </div>
+
+                <div class="form-group">
+                    <label>選擇表情（可選）</label>
+                    <div class="expression-selector">
+                        <button class="expression-btn" data-expression="happy">😊 開心</button>
+                        <button class="expression-btn" data-expression="angry">😠 生氣</button>
+                        <button class="expression-btn" data-expression="sad">😢 悲傷</button>
+                        <button class="expression-btn" data-expression="neutral">😐 中性</button>
+                        <button class="expression-btn" data-expression="surprised">😲 驚訝</button>
+                        <button class="expression-btn" data-expression="relaxed">😌 放鬆</button>
+                    </div>
+                </div>
+
+                <div class="actions">
+                    <button class="btn btn-success" onclick="testSpeak()">🎤 立即播放</button>
+                    <button class="btn btn-warning" onclick="resetFacialExpression()">😐 重置口型</button>
+                    <button class="btn btn-secondary" onclick="clearTest()">🗑️ 清空</button>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px;">
+                <strong>💡 API 使用說明：</strong>
+                <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; margin-top: 10px; overflow-x: auto;">
+curl -X POST http://localhost:5456/api/speak \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "你好，我是虛擬助手",
+    "expression": "happy",
+    "engine": "edgetts"
+  }'</pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedExpression = null;
+        let currentConfig = null;
+
+        // ============= 初始化 =============
+        async function init() {
+            await loadVRMList();
+            await loadCurrentVRM();
+            await loadTTSConfig();
+            setupExpressionButtons();
+        }
+
+        // ============= VRM 管理 =============
+        async function loadVRMList() {
+            try {
+                const response = await fetch('/api/vrm/list');
+                const data = await response.json();
+                
+                const vrmList = document.getElementById('vrmList');
+                vrmList.innerHTML = '';
+                
+                data.models.forEach(vrm => {
+                    const item = document.createElement('div');
+                    item.className = 'vrm-item';
+                    item.innerHTML = `
+                        <div class="vrm-name">${vrm.name}</div>
+                        <div class="vrm-type">${vrm.type === 'default' ? '預設' : '已上傳'}</div>
+                    `;
+                    item.onclick = (event) => selectVRM(vrm, event);
+                    vrmList.appendChild(item);
+                });
+            } catch (error) {
+                showAlert('載入 VRM 列表失敗: ' + error.message, 'error');
+            }
+        }
+
+        async function loadCurrentVRM() {
+            try {
+                const response = await fetch('/api/vrm/current');
+                const data = await response.json();
+                
+                document.getElementById('currentVRM').innerHTML = `
+                    <strong>${data.name}</strong>
+                    <br><small style="color: #666;">${data.path}</small>
+                `;
+            } catch (error) {
+                console.error('載入當前 VRM 失敗:', error);
+            }
+        }
+
+        async function selectVRM(vrm, event) {
+            try {
+                const response = await fetch('/api/vrm/select', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(vrm)
+                });
+                
+                if (response.ok) {
+                    await loadCurrentVRM();
+                    showAlert('已切換到: ' + vrm.name, 'success');
+                    
+                    // 更新選中狀態
+                    document.querySelectorAll('.vrm-item').forEach(item => {
+                        item.classList.remove('selected');
+                    });
+                    if (event && event.currentTarget) {
+                        event.currentTarget.classList.add('selected');
+                    }
+                }
+            } catch (error) {
+                showAlert('切換 VRM 失敗: ' + error.message, 'error');
+            }
+        }
+
+        async function uploadVRM(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch('/api/vrm/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    showAlert('上傳成功: ' + file.name, 'success');
+                    await loadVRMList();
+                } else {
+                    throw new Error('上傳失敗');
+                }
+            } catch (error) {
+                showAlert('上傳失敗: ' + error.message, 'error');
+            }
+            
+            input.value = '';
+        }
+
+        // ============= TTS 設定 =============
+        async function loadTTSConfig() {
+            try {
+                const response = await fetch('/api/tts/config');
+                currentConfig = await response.json();
+                
+                // 設定引擎
+                document.getElementById('ttsEngine').value = currentConfig.engine;
+                switchTTSEngine(currentConfig.engine);
+                
+                // Edge TTS
+                if (currentConfig.edgetts) {
+                    document.getElementById('edgeLanguage').value = currentConfig.edgetts.language;
+                    document.getElementById('edgeVoice').value = currentConfig.edgetts.voice;
+                    document.getElementById('edgeRate').value = currentConfig.edgetts.rate;
+                    document.getElementById('rateValue').textContent = currentConfig.edgetts.rate;
+                }
+                
+                // Index TTS
+                if (currentConfig.indextts) {
+                    document.getElementById('indexServerUrl').value = currentConfig.indextts.server_url;
+                    document.getElementById('indexCharacter').value = currentConfig.indextts.character;
+                }
+            } catch (error) {
+                console.error('載入 TTS 設定失敗:', error);
+            }
+        }
+
+        function switchTTSEngine(engine) {
+            document.querySelectorAll('.tts-config').forEach(el => {
+                el.classList.remove('active');
+            });
+            
+            if (engine === 'edgetts') {
+                document.getElementById('edgeTTSConfig').classList.add('active');
+            } else if (engine === 'indextts') {
+                document.getElementById('indexTTSConfig').classList.add('active');
+            }
+        }
+
+        async function saveTTSConfig() {
+            const engine = document.getElementById('ttsEngine').value;
+            
+            const config = {
+                engine: engine,
+                edgetts: {
+                    language: document.getElementById('edgeLanguage').value,
+                    voice: document.getElementById('edgeVoice').value,
+                    rate: parseFloat(document.getElementById('edgeRate').value)
+                },
+                indextts: {
+                    server_url: document.getElementById('indexServerUrl').value,
+                    character: document.getElementById('indexCharacter').value
+                }
+            };
+            
+            try {
+                const response = await fetch('/api/tts/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+                
+                if (response.ok) {
+                    showAlert('TTS 設定已儲存', 'success');
+                    currentConfig = config;
+                }
+            } catch (error) {
+                showAlert('儲存失敗: ' + error.message, 'error');
+            }
+        }
+
+        // ============= 表情選擇 =============
+        function setupExpressionButtons() {
+            document.querySelectorAll('.expression-btn').forEach(btn => {
+                btn.onclick = function() {
+                    if (this.classList.contains('selected')) {
+                        // 如果已經選中，則取消選擇
+                        this.classList.remove('selected');
+                        selectedExpression = null;
+                        console.log('表情已取消選擇');
+                    } else {
+                        // 清除其他選擇，選中當前
+                        document.querySelectorAll('.expression-btn').forEach(b => {
+                            b.classList.remove('selected');
+                        });
+                        this.classList.add('selected');
+                        selectedExpression = this.dataset.expression;
+                        console.log('選擇表情:', selectedExpression);
+                    }
+                };
+            });
+        }
+
+        // ============= 測試播放 =============
+        async function testSpeak() {
+            const text = document.getElementById('testText').value.trim();
+            
+            if (!text) {
+                showAlert('請輸入要說的內容', 'error');
+                return;
+            }
+            
+            const data = {
+                text: text,
+                expression: selectedExpression,
+                engine: document.getElementById('ttsEngine').value
+            };
+            
+            try {
+                const response = await fetch('/api/speak', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    showAlert('✅ 播放指令已發送！請查看 VRM 顯示頁面', 'success');
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.detail || '播放失敗');
+                }
+            } catch (error) {
+                showAlert('❌ ' + error.message, 'error');
+            }
+        }
+
+        function clearTest() {
+            document.getElementById('testText').value = '';
+            document.querySelectorAll('.expression-btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            selectedExpression = null;
+        }
+
+        // ============= 表情重置功能 =============
+        async function resetFacialExpression() {
+            try {
+                const response = await fetch('/api/reset-expression', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (response.ok) {
+                    showAlert('✅ 表情已重置！', 'success');
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.detail || '重置失敗');
+                }
+            } catch (error) {
+                showAlert('❌ 重置失敗: ' + error.message, 'error');
+            }
+        }
+
+        // ============= 簡化動畫管理 =============
+        async function uploadAnimation(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            if (!file.name.endsWith('.vrma')) {
+                showAlert('請選擇 .vrma 格式的動畫檔案', 'error');
+                input.value = '';
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                showAlert('📤 正在上傳動畫檔案...', 'success');
+                
+                const response = await fetch('/api/animations/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showAlert('✅ 動畫檔案上傳成功: ' + file.name, 'success');
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.detail || '上傳失敗');
+                }
+            } catch (error) {
+                showAlert('❌ 動畫檔案上傳失敗: ' + error.message, 'error');
+            }
+            
+            input.value = '';
+        }
+
+        // ============= 工具函數 =============
+        function showAlert(message, type) {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.textContent = message;
+            alertBox.className = `alert ${type} show`;
+            
+            setTimeout(() => {
+                alertBox.classList.remove('show');
+            }, 5000);
+        }
+
+        // ============= 初始化修改 =============
+        async function init() {
+            await loadVRMList();
+            await loadCurrentVRM();
+            await loadTTSConfig();
+            setupExpressionButtons();
+        }
+
+        // 啟動
+        init();
+    </script>
+</body>
+</html>

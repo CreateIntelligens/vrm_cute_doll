@@ -1,0 +1,48 @@
+{
+  "selectedModelId": "alice",
+  "selectedMotionIds": [
+    "akimbo"
+  ],
+  "defaultModels": [
+    {
+      "id": "alice",
+      "name": "Alice",
+      "path": "/vrm/Alice.vrm",
+      "type": "default"
+    },
+    {
+      "id": "bob",
+      "name": "Bob",
+      "path": "/vrm/Bob.vrm",
+      "type": "default"
+    }
+  ],
+  "userModels": [],
+  "defaultMotions": [
+    {
+      "id": "akimbo",
+      "name": "插腰",
+      "path": "/vrm/animations/akimbo.vrma",
+      "type": "default"
+    },
+    {
+      "id": "play_fingers",
+      "name": "玩手指",
+      "path": "/vrm/animations/play_fingers.vrma",
+      "type": "default"
+    },
+    {
+      "id": "scratch_head",
+      "name": "撓頭",
+      "path": "/vrm/animations/scratch_head.vrma",
+      "type": "default"
+    },
+    {
+      "id": "stretch",
+      "name": "伸展",
+      "path": "/vrm/animations/stretch.vrma",
+      "type": "default"
+    }
+  ],
+  "userMotions": []
+}
