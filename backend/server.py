@@ -48,8 +48,8 @@ active_connections: List[WebSocket] = []
 tts_config = {
     "engine": "edgetts",
     "edgetts": {
-        "language": "zh-CN",
-        "voice": "XiaoyiNeural",
+        "language": "zh-TW",
+        "voice": "HsiaoChenNeural",
         "rate": 1.0
     },
     "indextts": {
