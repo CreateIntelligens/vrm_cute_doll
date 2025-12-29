@@ -1,5 +1,7 @@
 {
-  "selectedModelId": "alice",
+  "selectedModelId": "user_QQman_fll",
+  "selectedModelName": "測試2.vrm",
+  "selectedModelPath": "/uploads/測試2.vrm",
   "selectedMotionIds": [
     "akimbo"
   ],
@@ -17,7 +19,14 @@
       "type": "default"
     }
   ],
-  "userModels": [],
+  "userModels": [
+    {
+      "id": "user_QQman_fll",
+      "name": "QQman_fll.vrm",
+      "path": "/uploads/QQman_fll.vrm",
+      "type": "uploaded"
+    }
+  ],
   "defaultMotions": [
     {
       "id": "akimbo",

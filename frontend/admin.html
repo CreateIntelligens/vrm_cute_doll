@@ -146,6 +146,7 @@
             cursor: pointer;
             transition: all 0.3s;
             text-align: center;
+            position: relative; /* Added for positioning delete button */
         }
 
         .vrm-item:hover {
@@ -156,6 +157,29 @@
         .vrm-item.selected {
             border-color: #667eea;
             background: #e8eaff;
+        }
+
+        .vrm-item .delete-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #ff4757;
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .vrm-item:hover .delete-btn {
+            opacity: 1;
         }
 
         .vrm-item .vrm-name {
@@ -662,7 +686,8 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
         // ============= VRM 管理 =============
         async function loadVRMList() {
             try {
-                const response = await fetch('/api/vrm/list');
+                // Add timestamp to prevent caching
+                const response = await fetch(`/api/vrm/list?t=${new Date().getTime()}`);
                 const data = await response.json();
                 
                 const vrmList = document.getElementById('vrmList');
@@ -671,15 +696,62 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 data.models.forEach(vrm => {
                     const item = document.createElement('div');
                     item.className = 'vrm-item';
-                    item.innerHTML = `
+                    
+                    // 構建內容
+                    let html = `
                         <div class="vrm-name">${vrm.name}</div>
                         <div class="vrm-type">${vrm.type === 'default' ? '預設' : '已上傳'}</div>
                     `;
-                    item.onclick = (event) => selectVRM(vrm, event);
+                    
+                    // 如果是上傳的模型，添加刪除按鈕
+                    if (vrm.type === 'uploaded') {
+                        html += `<button class="delete-btn" onclick="deleteVRM(event, '${vrm.name}', '${vrm.path}', '${vrm.type}')">×</button>`;
+                    }
+                    
+                    item.innerHTML = html;
+                    
+                    // 點擊卡片選擇模型 (排除刪除按鈕的點擊)
+                    item.onclick = (event) => {
+                        // 如果點擊的是刪除按鈕，不觸發選擇
+                        if (event.target.classList.contains('delete-btn')) return;
+                        selectVRM(vrm, event);
+                    };
+                    
                     vrmList.appendChild(item);
                 });
             } catch (error) {
                 showAlert('載入 VRM 列表失敗: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteVRM(event, name, path, type) {
+            event.stopPropagation(); // 阻止事件冒泡，避免觸發選擇
+            
+            if (!confirm(`確定要刪除模型 "${name}" 嗎？\n此操作無法撤銷。`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/vrm/delete', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: name,
+                        path: path,
+                        type: type
+                    })
+                });
+                
+                if (response.ok) {
+                    showAlert('已刪除模型: ' + name, 'success');
+                    await loadVRMList(); // 重新載入列表
+                    await loadCurrentVRM(); // 更新當前模型資訊 (如果被刪除的是當前模型)
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.detail || '刪除失敗');
+                }
+            } catch (error) {
+                showAlert('刪除失敗: ' + error.message, 'error');
             }
         }
 

@@ -237,6 +237,58 @@ async def upload_vrm(file: UploadFile = File(...)):
         "vrm": new_model
     }
 
+@app.delete("/api/vrm/delete")
+async def delete_vrm(vrm_info: VRMInfo):
+    """刪除 VRM 模型"""
+    global vrm_config, current_vrm
+
+    # 1. 檢查是否為上傳的模型 (只允許刪除上傳的模型)
+    if vrm_info.type != "uploaded":
+        raise HTTPException(status_code=400, detail="Cannot delete default models")
+
+    # 2. 查找文件
+    file_name = vrm_info.name
+    file_path = UPLOADS_DIR / file_name
+
+    if not file_path.exists():
+        # 如果文件不存在但配置中有，也應該清理配置
+        print(f"⚠️ File not found: {file_path}, cleaning up config anyway")
+    else:
+        try:
+            # 3. 刪除文件
+            os.remove(file_path)
+            print(f"🗑️ Deleted VRM file: {file_name}")
+        except Exception as e:
+            print(f"❌ Failed to delete file: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
+
+    # 4. 更新配置
+    vrm_config["userModels"] = [
+        m for m in vrm_config["userModels"] 
+        if m["path"] != vrm_info.path
+    ]
+
+    # 5. 如果刪除的是當前選中的模型，切換回預設模型
+    if current_vrm.get("path") == vrm_info.path:
+        default_model = vrm_config["defaultModels"][0]
+        current_vrm = {
+            "name": default_model["name"],
+            "path": default_model["path"]
+        }
+        vrm_config["selectedModelName"] = default_model["name"]
+        vrm_config["selectedModelPath"] = default_model["path"]
+        vrm_config["selectedModelId"] = default_model["id"]
+        
+        # 通知前端切換
+        await broadcast_to_vrm({
+            "type": "switch_model",
+            "data": current_vrm
+        })
+        print(f"🔄 Switched back to default model: {default_model['name']}")
+
+    save_config(vrm_config)
+    return {"success": True, "message": f"Model {file_name} deleted"}
+
 # ============= TTS Configuration APIs =============
 
 @app.get("/api/tts/config")

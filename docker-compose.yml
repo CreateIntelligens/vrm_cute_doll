@@ -8,6 +8,7 @@ services:
     ports:
       - "5456:5456"
     volumes:
+      - ./backend:/app
       - ./frontend:/app/frontend
       - ./vrm:/app/vrm
       - ./data:/app/data

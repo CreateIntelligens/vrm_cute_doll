@@ -337,6 +337,12 @@
                         // 检测 VRM 版本
                         isVRM1 = vrm.meta.metaVersion === '1';
                         
+                        // 修正 VRM 0.x 模型朝向 (預設是背對鏡頭，需旋轉180度)
+                        if (!isVRM1) {
+                            VRMUtils.rotateVRM0(vrm);
+                            console.log('🔄 VRM 0.x detected: rotated model 180 degrees to face camera');
+                        }
+                        
                         // 设置自然姿势
                         setNaturalPose(vrm);
                         
