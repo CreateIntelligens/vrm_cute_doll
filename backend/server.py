@@ -58,11 +58,36 @@ tts_config = {
     }
 }
 
-# 當前選擇的 VRM
-current_vrm = {
-    "name": "Alice.vrm",
-    "path": "/vrm/Alice.vrm"
-}
+# ============= 配置管理函數 =============
+
+def load_config():
+    """從文件加載配置"""
+    config_file = BASE_DIR / "data" / "vrm_config.json"
+    try:
+        if config_file.exists():
+            with open(config_file, "r", encoding="utf-8") as f:
+                loaded_config = json.load(f)
+                print(f"✅ Config loaded from {config_file}")
+                return loaded_config
+        else:
+            print(f"⚠️ Config file not found, using defaults")
+            return None
+    except Exception as e:
+        print(f"❌ Failed to load config: {e}")
+        return None
+
+def save_config(config_data):
+    """保存配置到文件"""
+    config_file = BASE_DIR / "data" / "vrm_config.json"
+    try:
+        config_file.parent.mkdir(exist_ok=True)
+        with open(config_file, "w", encoding="utf-8") as f:
+            json.dump(config_data, f, ensure_ascii=False, indent=2)
+        print(f"✅ Config saved to {config_file}")
+        return True
+    except Exception as e:
+        print(f"❌ Failed to save config: {e}")
+        return False
 
 # ============= Pydantic Models =============
 
@@ -148,40 +173,68 @@ async def get_current_vrm():
 @app.post("/api/vrm/select")
 async def select_vrm(vrm_info: VRMInfo):
     """選擇要使用的 VRM"""
-    global current_vrm
+    global current_vrm, vrm_config
+
+    # 更新 current_vrm
     current_vrm = {
         "name": vrm_info.name,
         "path": vrm_info.path
     }
-    
+
+    # 同步更新到 vrm_config
+    vrm_config["selectedModelName"] = vrm_info.name
+    vrm_config["selectedModelPath"] = vrm_info.path
+
+    # 如果有 model ID，也更新（通過 path 匹配找到對應的 model ID）
+    for model in vrm_config["defaultModels"] + vrm_config["userModels"]:
+        if model["path"] == vrm_info.path:
+            vrm_config["selectedModelId"] = model["id"]
+            break
+
+    # 保存到文件（持久化）
+    save_config(vrm_config)
+
     # 通知 VRM 頁面切換模型
     await broadcast_to_vrm({
         "type": "switch_model",
         "data": current_vrm
     })
-    
+
+    print(f"🎭 VRM switched to: {vrm_info.name}")
     return {"success": True, "vrm": current_vrm}
 
 @app.post("/api/vrm/upload")
 async def upload_vrm(file: UploadFile = File(...)):
     """上傳 VRM 檔案"""
+    global vrm_config
+
     if not file.filename.endswith('.vrm'):
         raise HTTPException(status_code=400, detail="Only .vrm files are allowed")
-    
+
     file_path = UPLOADS_DIR / file.filename
-    
+
     # 保存檔案
     with open(file_path, "wb") as buffer:
         content = await file.read()
         buffer.write(content)
-    
+
+    # 創建新模型對象
+    new_model = {
+        "id": f"user_{file.filename[:-4]}",  # 移除 .vrm 扩展名
+        "name": file.filename,
+        "path": f"/uploads/{file.filename}",
+        "type": "uploaded"
+    }
+
+    # 添加到 userModels 配置（避免重复）
+    if not any(m["path"] == new_model["path"] for m in vrm_config["userModels"]):
+        vrm_config["userModels"].append(new_model)
+        save_config(vrm_config)
+        print(f"📦 New VRM model added: {file.filename}")
+
     return {
         "success": True,
-        "vrm": {
-            "name": file.filename,
-            "path": f"/uploads/{file.filename}",
-            "type": "uploaded"
-        }
+        "vrm": new_model
     }
 
 # ============= TTS Configuration APIs =============
@@ -384,7 +437,9 @@ async def play_animation(animation_data: dict):
 # VRM 配置存儲（擴充動畫配置）
 vrm_config = {
     "selectedModelId": "alice",
-    "selectedMotionIds": [],  # 🎯 新增：選中的動畫 ID 列表
+    "selectedModelName": "Alice.vrm",  # 新增：選中的模型名稱
+    "selectedModelPath": "/vrm/Alice.vrm",  # 新增：選中的模型路徑
+    "selectedMotionIds": [],  # 選中的動畫 ID 列表
     "defaultModels": [
         {"id": "alice", "name": "Alice", "path": "/vrm/Alice.vrm", "type": "default"},
         {"id": "bob", "name": "Bob", "path": "/vrm/Bob.vrm", "type": "default"}
@@ -399,6 +454,22 @@ vrm_config = {
     "userMotions": []
 }
 
+# 啟動時加載配置
+loaded_config = load_config()
+if loaded_config:
+    # 更新 vrm_config，但保留默認值作為備選
+    for key in loaded_config:
+        if key in vrm_config:
+            vrm_config[key] = loaded_config[key]
+    print(f"📋 VRM config updated from file")
+
+# 從 vrm_config 構建 current_vrm（確保同步）
+current_vrm = {
+    "name": vrm_config.get("selectedModelName", "Alice.vrm"),
+    "path": vrm_config.get("selectedModelPath", "/vrm/Alice.vrm")
+}
+print(f"🎭 Current VRM: {current_vrm['name']}")
+
 @app.get("/api/animations/config")
 async def get_animation_config():
     """獲取動畫配置"""
@@ -412,18 +483,12 @@ async def get_animation_config():
 async def update_animation_config(config_data: dict):
     """更新動畫配置"""
     global vrm_config
-    
+
     if "selectedMotionIds" in config_data:
         vrm_config["selectedMotionIds"] = config_data["selectedMotionIds"]
-    
-    # 保存到文件（可選）
-    try:
-        config_file = BASE_DIR / "data" / "vrm_config.json"
-        config_file.parent.mkdir(exist_ok=True)
-        with open(config_file, "w", encoding="utf-8") as f:
-            json.dump(vrm_config, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"Warning: Failed to save config: {e}")
+
+    # 保存到文件（持久化）
+    save_config(vrm_config)
     
     # 🔧 新增：通知前端配置已更新
     try:
