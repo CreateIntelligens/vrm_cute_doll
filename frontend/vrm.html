@@ -420,7 +420,8 @@
                     } else if (message.type === 'switch_model') {
                         await loadVRM(message.data.path);
                     } else if (message.type === 'reset_expression') {
-                        resetAllExpressions();
+                        // 傳遞參數給 resetAllExpressions
+                        resetAllExpressions(message.data);
                     } else if (message.type === 'play_animation') {
                         console.log('動畫功能暫時不可用');
                     } else if (message.type === 'config_updated') {
@@ -747,24 +748,27 @@
         }
 
         // 重置所有表情的函數
-        function resetAllExpressions() {
-            console.log('🔄 [RESET] Resetting all expressions and clearing audio queue');
+        function resetAllExpressions(options = {}) {
+            const stopAudio = options.stopAudio !== undefined ? options.stopAudio : true;
+            console.log(`🔄 [RESET] Resetting all expressions (Stop audio: ${stopAudio})`);
 
-            // 1. 清空音頻播放隊列
-            audioQueue = [];
-            isPlayingAudio = false;
-            console.log('🎵 [QUEUE] Audio queue cleared');
+            if (stopAudio) {
+                // 1. 清空音頻播放隊列
+                audioQueue = [];
+                isPlayingAudio = false;
+                console.log('🎵 [QUEUE] Audio queue cleared');
 
-            // 2. 停止當前音訊
-            if (currentAudio) {
-                console.log('🔊 [AUDIO] Stopping current audio');
-                currentAudio.pause();
-                currentAudio.currentTime = 0;
-                currentAudio = null;
+                // 2. 停止當前音訊
+                if (currentAudio) {
+                    console.log('🔊 [AUDIO] Stopping current audio');
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                    currentAudio = null;
+                }
+                
+                // 隱藏字幕
+                hideSubtitle();
             }
-
-            // 3. 隱藏字幕
-            hideSubtitle();
 
             // 4. 重置表情管理器
             if (currentVrm && currentVrm.expressionManager) {
@@ -775,13 +779,14 @@
                 });
 
                 currentExpression = null;
-                frameCount = 0;
+                // 重置口型同步相關
+                // frameCount = 0; // 不一定要重置這個，可能會影響閒置動畫，但沒關係
 
                 console.log('✅ [RESET] Expression reset complete');
                 return true;
             }
 
-            console.log('⚠️ [RESET] VRM not ready, queue cleared anyway');
+            console.log('⚠️ [RESET] VRM not ready');
             return false;
         }
 

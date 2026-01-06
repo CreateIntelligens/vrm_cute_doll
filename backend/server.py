@@ -407,6 +407,130 @@ async def speak(request: SpeakRequest):
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported engine: {engine}")
 
+# ============= Stream Speak API (Internal Logic Only) =============
+
+def split_text_into_chunks(text: str) -> List[str]:
+    """將長文本切割成短句 (比照前端 admin.html 邏輯)"""
+    import re
+    
+    # 1. 文字清理 (比照前端 splitTTSBuffer 邏輯)
+    # 移除 Markdown 標題 (#)
+    text = re.sub(r'#{1,6}\s', '', text)
+    # 移除 Markdown 格式符號 (*_~`)
+    text = re.sub(r'[*_~`]+', '', text)
+    # 移除列表標記 (- or *)
+    text = re.sub(r'^\s*[-*]\s', '', text, flags=re.MULTILINE)
+    # 移除圖片 ![alt](url)
+    text = re.sub(r'!\[.*?\]\(.*?\)', '', text)
+    # 移除連結 [text](url) -> text
+    text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)
+    # 移除常見 Emoji
+    text = re.sub(r'[\U00010000-\U0010ffff]', '', text)
+    # 合併多餘空格
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    if not text:
+        return []
+        
+    # 2. 定義分隔符 (比照前端: "。", "\n", "？", "！", "，", "～", "!", "?", ",", "~")
+    # 使用 regex split 並過濾掉空字串
+    separators = r'[。\n？！，～!?,~]'
+    chunks = [c.strip() for c in re.split(separators, text) if c.strip()]
+    
+    return chunks
+
+@app.post("/api/stream-speak")
+async def stream_speak(request: SpeakRequest):
+    """處理長文本，自動分段並依序推播至前端"""
+    import time
+    import base64
+    
+    text = request.text
+    engine = request.engine or tts_config["engine"]
+    expression = request.expression
+    
+    if not text:
+        raise HTTPException(status_code=400, detail="Text is empty")
+        
+    # 1. 執行分段
+    chunks = split_text_into_chunks(text)
+    print(f"🌊 Stream speak: split into {len(chunks)} chunks")
+    
+    if not chunks:
+        return {"success": False, "message": "No valid text content after cleaning"}
+        
+    # 2. 依序處理每個片段並發送 WebSocket
+    for i, chunk in enumerate(chunks):
+        chunk_id = f"stream_{int(time.time() * 1000)}_{i}"
+        print(f"  [Chunk {i+1}/{len(chunks)}] Processing: {chunk[:30]}...")
+        
+        try:
+            if engine == "edgetts":
+                # Edge TTS 邏輯
+                config = tts_config["edgetts"]
+                full_voice = f"{config['language']}-{config['voice']}"
+                rate = config.get("rate", 1.0)
+                rate_param = f"+{int((rate - 1.0) * 100)}%" if rate >= 1.0 else f"-{int((1.0 - rate) * 100)}%"
+                
+                audio_data = bytearray()
+                communicate = edge_tts.Communicate(chunk, full_voice, rate=rate_param)
+                async for chunk_data in communicate.stream():
+                    if chunk_data["type"] == "audio":
+                        audio_data.extend(chunk_data["data"])
+                
+                audio_base64 = base64.b64encode(bytes(audio_data)).decode('utf-8')
+                mime_type = "audio/mpeg"
+                
+            elif engine == "indextts":
+                # Index TTS 邏輯 (包含繁簡轉換)
+                config = tts_config["indextts"]
+                processed_text = chunk
+                if opencc:
+                    try:
+                        cc = opencc.OpenCC('t2s')
+                        processed_text = cc.convert(chunk)
+                        processed_text = processed_text.replace("著", "着")
+                    except: pass
+                print(f"    Processed text for Index TTS: {processed_text[:30]}...")
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        f"{config['server_url']}/tts",
+                        json={"text": processed_text, "character": config['character']},
+                        timeout=aiohttp.ClientTimeout(total=60)
+                    ) as response:
+                        if response.status == 200:
+                            audio_bytes = await response.read()
+                            audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+                            mime_type = "audio/wav"
+                        else:
+                            print(f"  ❌ Chunk {i+1} failed: Index TTS error {response.status}")
+                            continue
+            else:
+                print(f"  ❌ Unsupported engine: {engine}")
+                break
+
+            # 將結果推播給前端顯示頁面
+            await broadcast_to_vrm({
+                "type": "speak",
+                "data": {
+                    "chunkId": chunk_id,
+                    "text": chunk,
+                    "expression": expression,
+                    "audioData": audio_base64,
+                    "mimeType": mime_type
+                }
+            })
+            
+        except Exception as e:
+            print(f"  ❌ Error processing chunk {i+1}: {str(e)}")
+            continue
+
+    return {
+        "success": True, 
+        "chunks_count": len(chunks),
+        "message": "All chunks processed and sent to queue"
+    }
+
 # ============= Animation Management APIs =============
 
 @app.get("/api/animations/list")
@@ -568,11 +692,14 @@ async def get_vrm_config():
 # ============= Reset Expression API =============
 
 @app.post("/api/reset-expression")
-async def reset_expression():
+async def reset_expression(stop_audio: bool = True):
     """重置所有表情"""
     try:
         await broadcast_to_vrm({
-            "type": "reset_expression"
+            "type": "reset_expression",
+            "data": {
+                "stopAudio": stop_audio
+            }
         })
         return {"success": True, "message": "表情已重置"}
     except Exception as e:

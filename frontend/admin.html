@@ -994,9 +994,13 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
         let isAudioPlaying = false;    // 是否有音頻在播放
         let currentPlayingItem = null; // 當前播放項目
         let queueIdCounter = 0;        // 隊列ID計數器
+        let isInterrupted = false;     // 中斷標誌
 
         // ============= 測試播放 =============
         async function testSpeak() {
+            // 重置中斷標誌
+            isInterrupted = false;
+            
             const text = document.getElementById('testText').value.trim();
 
             if (!text) {
@@ -1042,6 +1046,13 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 return;
             }
 
+            // 如果已被中斷，則不再開始新的任務
+            if (isInterrupted) {
+                console.log('播放已中斷，清空剩餘隊列');
+                audioQueue = [];
+                return;
+            }
+
             isAudioPlaying = true;
             currentPlayingItem = audioQueue.shift(); // 從隊列中取出第一個任務
 
@@ -1051,14 +1062,16 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 await playTaskChunks(currentPlayingItem);
             } catch (error) {
                 console.error('播放任務失敗:', error);
-                showAlert('❌ 播放失敗: ' + error.message, 'error');
+                if (!isInterrupted) { // 只有非中斷導致的錯誤才顯示
+                    showAlert('❌ 播放失敗: ' + error.message, 'error');
+                }
             } finally {
                 // 任務完成，重置狀態
                 isAudioPlaying = false;
                 currentPlayingItem = null;
 
-                // 如果隊列中還有任務，繼續播放
-                if (audioQueue.length > 0) {
+                // 如果隊列中還有任務且未被中斷，繼續播放
+                if (audioQueue.length > 0 && !isInterrupted) {
                     setTimeout(() => startPlayingQueue(), 500); // 稍微延遲後開始下一個任務
                 }
             }
@@ -1067,6 +1080,12 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
         async function playTaskChunks(task) {
             // 逐個發送片段到後端
             for (let i = 0; i < task.chunks.length; i++) {
+                // 每次發送前檢查中斷標誌
+                if (isInterrupted) {
+                    console.log(`任務 ${task.id} 因中斷而停止`);
+                    break;
+                }
+
                 const chunk = task.chunks[i];
 
                 console.log(`播放任務 ${task.id} 的第 ${i + 1}/${task.chunks.length} 段: ${chunk.substring(0, 30)}...`);
@@ -1088,6 +1107,8 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                     }
 
                     // 等待一小段時間讓 VRM 播放
+                    // 注意：這裏的等待只是為了避免發送太快，實際播放時間可能更長
+                    // 如果用戶點了中斷，這個等待也會繼續，但下一次循環會檢查 isInterrupted
                     await new Promise(resolve => setTimeout(resolve, 500));
 
                 } catch (error) {
@@ -1096,19 +1117,24 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 }
             }
 
-            console.log(`✅ 任務 ${task.id} 所有片段已發送完成`);
+            if (!isInterrupted) {
+                console.log(`✅ 任務 ${task.id} 所有片段已發送完成`);
+            }
         }
 
         // 中斷播放
         async function interruptTTS() {
             try {
-                // 1. 清空前端播放隊列
+                // 1. 設置中斷標誌，阻止後續請求
+                isInterrupted = true;
+                
+                // 2. 清空前端播放隊列
                 audioQueue = [];
-                isAudioPlaying = false;
-                currentPlayingItem = null;
+                // 不要立即重置 isAudioPlaying，讓 playTaskChunks 自己結束
+                // currentPlayingItem = null; 
 
-                // 2. 通知後端重置表情（這也會停止 VRM 的音頻播放）
-                const response = await fetch('/api/reset-expression', {
+                // 3. 通知後端重置表情（這也會停止 VRM 的音頻播放）
+                const response = await fetch('/api/reset-expression?stop_audio=true', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -1137,13 +1163,14 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
         // ============= 表情重置功能 =============
         async function resetFacialExpression() {
             try {
-                const response = await fetch('/api/reset-expression', {
+                // 僅重置表情，不停止音頻
+                const response = await fetch('/api/reset-expression?stop_audio=false', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
                 
                 if (response.ok) {
-                    showAlert('✅ 表情已重置！', 'success');
+                    showAlert('✅ 表情已重置！(不影響播放)', 'success');
                 } else {
                     const error = await response.json();
                     throw new Error(error.detail || '重置失敗');
