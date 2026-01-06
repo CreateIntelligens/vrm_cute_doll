@@ -322,6 +322,79 @@
             transform: translateY(-2px);
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
+
+        .animation-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .animation-item:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .animation-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
+            cursor: pointer;
+        }
+
+        .animation-item .animation-info {
+            flex: 1;
+        }
+
+        .animation-item .animation-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .animation-item .animation-type {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .animation-item .delete-animation-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: #ff4757;
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            margin-left: 10px;
+        }
+
+        .animation-item:hover .delete-animation-btn {
+            opacity: 1;
+        }
+
+        .animation-item .delete-animation-btn:hover {
+            background: #ee5a6f;
+        }
+
+        .selected-animation-tag {
+            display: inline-block;
+            padding: 6px 12px;
+            background: #667eea;
+            color: white;
+            border-radius: 6px;
+            margin: 4px;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
@@ -425,28 +498,31 @@
         <!-- 動畫管理 -->
         <div class="card">
             <h2>🎭 動畫管理</h2>
-            
-            <div class="form-group">
-                <label>動畫輪播狀態</label>
-                <div style="background: #d4edda; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #c3e6cb;">
-                    <strong style="color: #155724;">✅ 自動輪播模式已啟用</strong>
-                    <div style="margin-top: 10px; font-size: 14px; color: #155724;">
-                        系統會自動輪播以下4個動畫：插腰、玩手指、撓頭、伸展
-                    </div>
-                    <div style="margin-top: 8px; font-size: 12px; color: #6c757d;">
-                        💡 動畫會隨機播放，無需手動選擇
-                    </div>
-                </div>
-            </div>
 
-            <!-- <div class="form-group">
+            <div class="form-group">
                 <label>上傳 VRMA 動畫檔案</label>
                 <div class="upload-area" onclick="document.getElementById('animationFileInput').click()">
                     <input type="file" id="animationFileInput" accept=".vrma" onchange="uploadAnimation(this)">
                     <p>🎬 點擊或拖曳 VRMA 動畫檔案到此處上傳</p>
                     <p style="font-size: 12px; color: #666; margin-top: 10px;">支援 .vrma 格式</p>
                 </div>
-            </div> -->
+            </div>
+
+            <div class="form-group">
+                <label>當前輪播的動畫 (<span id="selectedCount">0</span> 個)</label>
+                <div id="selectedAnimations" style="padding: 12px; background: #e8f5e8; border-radius: 8px; border: 1px solid #c3e6cb; min-height: 50px;">
+                    <span style="color: #666;">尚未選擇任何動畫</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>可用的動畫 (勾選要輪播的動畫)</label>
+                <div id="animationsList" style="max-height: 400px; overflow-y: auto;">
+                    載入中...
+                </div>
+            </div>
+
+            <button class="btn btn-primary" onclick="saveAnimationConfig()">💾 儲存動畫設定</button>
         </div>
 
         <!-- 測試控制台 -->
@@ -1180,31 +1256,153 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             }
         }
 
-        // ============= 簡化動畫管理 =============
+        // ============= 動畫管理 =============
+        let availableAnimations = [];  // 所有可用的動畫
+        let selectedAnimationIds = [];  // 當前選中的動畫ID
+
+        async function loadAnimationsList() {
+            try {
+                // 加載所有可用動畫
+                const listResponse = await fetch('/api/animations/config');
+                const configData = await listResponse.json();
+
+                availableAnimations = [
+                    ...configData.defaultMotions,
+                    ...configData.userMotions
+                ];
+
+                // 加載當前配置
+                selectedAnimationIds = configData.selectedMotionIds || [];
+
+                // 渲染動畫列表
+                renderAnimationsList();
+                updateSelectedAnimationsDisplay();
+
+                console.log(`已加載 ${availableAnimations.length} 個動畫，選中 ${selectedAnimationIds.length} 個`);
+            } catch (error) {
+                console.error('載入動畫列表失敗:', error);
+                showAlert('❌ 載入動畫列表失敗: ' + error.message, 'error');
+            }
+        }
+
+        function renderAnimationsList() {
+            const container = document.getElementById('animationsList');
+
+            if (availableAnimations.length === 0) {
+                container.innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">沒有可用的動畫</div>';
+                return;
+            }
+
+            container.innerHTML = '';
+
+            availableAnimations.forEach(animation => {
+                const item = document.createElement('div');
+                item.className = 'animation-item';
+
+                const isChecked = selectedAnimationIds.includes(animation.id);
+
+                let html = `
+                    <input type="checkbox"
+                           id="anim_${animation.id}"
+                           data-animation-id="${animation.id}"
+                           ${isChecked ? 'checked' : ''}
+                           onchange="toggleAnimation('${animation.id}')">
+                    <label for="anim_${animation.id}" class="animation-info" style="cursor: pointer;">
+                        <div class="animation-name">${animation.name}</div>
+                        <div class="animation-type">${animation.type === 'default' ? '預設動畫' : '已上傳'}</div>
+                    </label>
+                `;
+
+                // 只有上傳的動畫才顯示刪除按鈕
+                if (animation.type === 'uploaded') {
+                    html += `<button class="delete-animation-btn" onclick="deleteAnimation(event, '${animation.id}', '${animation.path}', '${animation.type}')">×</button>`;
+                }
+
+                item.innerHTML = html;
+                container.appendChild(item);
+            });
+        }
+
+        function toggleAnimation(animationId) {
+            const checkbox = document.getElementById(`anim_${animationId}`);
+
+            if (checkbox.checked) {
+                if (!selectedAnimationIds.includes(animationId)) {
+                    selectedAnimationIds.push(animationId);
+                }
+            } else {
+                selectedAnimationIds = selectedAnimationIds.filter(id => id !== animationId);
+            }
+
+            updateSelectedAnimationsDisplay();
+        }
+
+        function updateSelectedAnimationsDisplay() {
+            const container = document.getElementById('selectedAnimations');
+            const countSpan = document.getElementById('selectedCount');
+
+            countSpan.textContent = selectedAnimationIds.length;
+
+            if (selectedAnimationIds.length === 0) {
+                container.innerHTML = '<span style="color: #666;">尚未選擇任何動畫</span>';
+                return;
+            }
+
+            const selectedAnimations = availableAnimations.filter(a => selectedAnimationIds.includes(a.id));
+
+            container.innerHTML = selectedAnimations.map(anim =>
+                `<span class="selected-animation-tag">${anim.name}</span>`
+            ).join('');
+        }
+
+        async function saveAnimationConfig() {
+            try {
+                const response = await fetch('/api/animations/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        selectedMotionIds: selectedAnimationIds
+                    })
+                });
+
+                if (response.ok) {
+                    showAlert(`✅ 動畫設定已儲存 (${selectedAnimationIds.length} 個動畫)`, 'success');
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.detail || '儲存失敗');
+                }
+            } catch (error) {
+                showAlert('❌ 儲存失敗: ' + error.message, 'error');
+            }
+        }
+
         async function uploadAnimation(input) {
             const file = input.files[0];
             if (!file) return;
-            
+
             if (!file.name.endsWith('.vrma')) {
                 showAlert('請選擇 .vrma 格式的動畫檔案', 'error');
                 input.value = '';
                 return;
             }
-            
+
             const formData = new FormData();
             formData.append('file', file);
-            
+
             try {
                 showAlert('📤 正在上傳動畫檔案...', 'success');
-                
+
                 const response = await fetch('/api/animations/upload', {
                     method: 'POST',
                     body: formData
                 });
-                
+
                 if (response.ok) {
                     const result = await response.json();
                     showAlert('✅ 動畫檔案上傳成功: ' + file.name, 'success');
+
+                    // 重新加載動畫列表
+                    await loadAnimationsList();
                 } else {
                     const error = await response.json();
                     throw new Error(error.detail || '上傳失敗');
@@ -1212,8 +1410,46 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             } catch (error) {
                 showAlert('❌ 動畫檔案上傳失敗: ' + error.message, 'error');
             }
-            
+
             input.value = '';
+        }
+
+        async function deleteAnimation(event, animationId, animationPath, animationType) {
+            event.stopPropagation();
+
+            const animation = availableAnimations.find(a => a.id === animationId);
+            const animationName = animation ? animation.name : animationId;
+
+            if (!confirm(`確定要刪除動畫 "${animationName}" 嗎？\n此操作無法撤銷。`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/animations/delete', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: animationId,
+                        path: animationPath,
+                        type: animationType
+                    })
+                });
+
+                if (response.ok) {
+                    showAlert('✅ 已刪除動畫: ' + animationName, 'success');
+
+                    // 從選中列表移除
+                    selectedAnimationIds = selectedAnimationIds.filter(id => id !== animationId);
+
+                    // 重新加載動畫列表
+                    await loadAnimationsList();
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.detail || '刪除失敗');
+                }
+            } catch (error) {
+                showAlert('❌ 刪除失敗: ' + error.message, 'error');
+            }
         }
 
         // ============= 工具函數 =============
@@ -1232,6 +1468,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             await loadVRMList();
             await loadCurrentVRM();
             await loadTTSConfig();
+            await loadAnimationsList();  // 加載動畫列表
             setupExpressionButtons();
         }
 

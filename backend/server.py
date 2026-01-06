@@ -565,29 +565,90 @@ async def list_animations():
 @app.post("/api/animations/upload")
 async def upload_animation(file: UploadFile = File(...)):
     """上傳動畫檔案"""
+    global vrm_config
+
     if not file.filename.endswith('.vrma'):
         raise HTTPException(status_code=400, detail="Only .vrma files are allowed")
-    
+
     # 確保動畫目錄存在
     animations_dir = UPLOADS_DIR / "animations"
     animations_dir.mkdir(exist_ok=True)
-    
+
     file_path = animations_dir / file.filename
-    
+
     # 保存檔案
     with open(file_path, "wb") as buffer:
         content = await file.read()
         buffer.write(content)
-    
+
+    # 創建動畫資訊
+    animation_id = f"user_{file.filename[:-5]}"  # 移除 .vrma 擴展名
+    animation_info = {
+        "id": animation_id,
+        "name": file.filename[:-5],  # 顯示名稱（不含擴展名）
+        "path": f"/uploads/animations/{file.filename}",
+        "type": "uploaded"
+    }
+
+    # 添加到 userMotions（如果不存在）
+    if not any(motion["id"] == animation_id for motion in vrm_config["userMotions"]):
+        vrm_config["userMotions"].append(animation_info)
+        save_config(vrm_config)
+        print(f"✅ Animation added to userMotions: {animation_id}")
+
     return {
         "success": True,
-        "animation": {
-            "id": f"user_{file.filename[:-5]}",  # 移除 .vrma 擴展名
-            "name": file.filename,
-            "path": f"/uploads/animations/{file.filename}",
-            "type": "uploaded"
-        }
+        "animation": animation_info
     }
+
+@app.delete("/api/animations/delete")
+async def delete_animation(animation_data: dict):
+    """刪除上傳的動畫檔案"""
+    global vrm_config
+
+    animation_id = animation_data.get("id")
+    animation_path = animation_data.get("path")
+    animation_type = animation_data.get("type")
+
+    if not animation_id or not animation_path:
+        raise HTTPException(status_code=400, detail="Animation ID and path are required")
+
+    # 只允許刪除上傳的動畫
+    if animation_type != "uploaded":
+        raise HTTPException(status_code=400, detail="Cannot delete default animations")
+
+    try:
+        # 從 userMotions 移除
+        vrm_config["userMotions"] = [m for m in vrm_config["userMotions"] if m["id"] != animation_id]
+
+        # 從 selectedMotionIds 移除（如果存在）
+        if animation_id in vrm_config["selectedMotionIds"]:
+            vrm_config["selectedMotionIds"].remove(animation_id)
+
+        # 刪除實際文件
+        file_path = UPLOADS_DIR / "animations" / animation_path.split('/')[-1]
+        if file_path.exists():
+            file_path.unlink()
+            print(f"🗑️ Deleted animation file: {file_path}")
+
+        # 保存配置
+        save_config(vrm_config)
+
+        # 通知前端配置已更新
+        try:
+            await broadcast_to_vrm({
+                "type": "config_updated",
+                "data": {
+                    "selectedMotionIds": vrm_config["selectedMotionIds"],
+                    "timestamp": int(asyncio.get_event_loop().time() * 1000)
+                }
+            })
+        except Exception as e:
+            print(f"Warning: Failed to broadcast config update: {e}")
+
+        return {"success": True, "message": f"動畫 {animation_id} 已刪除"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"刪除失敗: {str(e)}")
 
 @app.post("/api/animations/play")
 async def play_animation(animation_data: dict):
@@ -595,7 +656,7 @@ async def play_animation(animation_data: dict):
     animation_id = animation_data.get("id")
     if not animation_id:
         raise HTTPException(status_code=400, detail="Animation ID is required")
-    
+
     try:
         await broadcast_to_vrm({
             "type": "play_animation",
@@ -615,7 +676,7 @@ vrm_config = {
     "selectedModelId": "alice",
     "selectedModelName": "Alice.vrm",  # 新增：選中的模型名稱
     "selectedModelPath": "/vrm/Alice.vrm",  # 新增：選中的模型路徑
-    "selectedMotionIds": [],  # 選中的動畫 ID 列表
+    "selectedMotionIds": ["akimbo", "play_fingers", "scratch_head", "stretch"],  # 預設選中所有4個動畫
     "defaultModels": [
         {"id": "alice", "name": "Alice", "path": "/vrm/Alice.vrm", "type": "default"},
         {"id": "bob", "name": "Bob", "path": "/vrm/Bob.vrm", "type": "default"}
@@ -684,10 +745,8 @@ async def update_animation_config(config_data: dict):
 @app.get("/api/vrm/config")
 async def get_vrm_config():
     """獲取完整的 VRM 配置（給前端使用）"""
-    # 🔧 簡化：默認返回全部4個動畫
-    simplified_config = vrm_config.copy()
-    simplified_config["selectedMotionIds"] = ["akimbo", "play_fingers", "scratch_head", "stretch"]
-    return {"VRMConfig": simplified_config}
+    # 返回真實的配置，包括用戶選中的動畫
+    return {"VRMConfig": vrm_config}
 
 # ============= Reset Expression API =============
 

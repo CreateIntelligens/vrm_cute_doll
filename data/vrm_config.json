@@ -3,7 +3,7 @@
   "selectedModelName": "測試2.vrm",
   "selectedModelPath": "/uploads/測試2.vrm",
   "selectedMotionIds": [
-    "akimbo"
+    "user_VRMA_03"
   ],
   "defaultModels": [
     {
@@ -53,5 +53,24 @@
       "type": "default"
     }
   ],
-  "userMotions": []
+  "userMotions": [
+    {
+      "id": "user_VRMA_01",
+      "name": "VRMA_01",
+      "path": "/uploads/animations/VRMA_01.vrma",
+      "type": "uploaded"
+    },
+    {
+      "id": "user_VRMA_02",
+      "name": "VRMA_02",
+      "path": "/uploads/animations/VRMA_02.vrma",
+      "type": "uploaded"
+    },
+    {
+      "id": "user_VRMA_03",
+      "name": "VRMA_03",
+      "path": "/uploads/animations/VRMA_03.vrma",
+      "type": "uploaded"
+    }
+  ]
 }

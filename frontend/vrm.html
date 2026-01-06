@@ -1001,8 +1001,26 @@
                     this.scheduleNextVRMAAnimation();
                     return;
                 }
-                
+
                 try {
+                    // 🔧 修復：播放新動畫前，徹底清除舊動畫
+                    if (this.currentIdleAction) {
+                        console.log('🧹 Cleaning up previous VRMA animation...');
+                        const oldAction = this.currentIdleAction;
+                        const oldClip = oldAction.getClip();
+
+                        // 停止並重置動作
+                        oldAction.stop();
+                        oldAction.reset();
+
+                        // 從 mixer 中完全移除舊動畫的快取
+                        this.mixer.uncacheAction(oldClip);
+                        this.mixer.uncacheClip(oldClip);
+
+                        this.currentIdleAction = null;
+                        console.log('✅ Previous animation cleaned');
+                    }
+
                     // 需要動態匯入 createVRMAnimationClip
                     import('@pixiv/three-vrm-animation').then(({ createVRMAnimationClip }) => {
                         const clip = createVRMAnimationClip(animationData.animation, this.vrm);
@@ -1011,13 +1029,15 @@
                             this.scheduleNextVRMAAnimation();
                             return;
                         }
-                        
+
+                        console.log(`▶️ Playing VRMA animation: ${animationData.name}`);
                         this.currentIdleAction = this.mixer.clipAction(clip);
                         this.currentIdleAction.setLoop(THREE.LoopOnce);
-                        this.currentIdleAction.clampWhenFinished = true;
+                        this.currentIdleAction.clampWhenFinished = false;  // 🔧 改為 false，避免停在最後一幀
+                        this.currentIdleAction.reset();  // 🔧 確保從頭開始
                         this.currentIdleAction.fadeIn(1.0);
                         this.currentIdleAction.play();
-                        
+
                         const onFinished = (event) => {
                             if (event.action === this.currentIdleAction) {
                                 console.log(`VRMA animation ${animationData.name} finished`);
@@ -1025,13 +1045,13 @@
                                 this.mixer.removeEventListener('finished', onFinished);
                             }
                         };
-                        
+
                         this.mixer.addEventListener('finished', onFinished);
                     }).catch(error => {
                         console.error('Failed to load VRM animation library:', error);
                         this.scheduleNextVRMAAnimation();
                     });
-                    
+
                 } catch (error) {
                     console.error(`Error playing VRMA animation ${animationData.name}:`, error);
                     this.scheduleNextVRMAAnimation();
@@ -1042,53 +1062,68 @@
                 if (this.currentMode !== 'vrma' || !this.isActive) {
                     return;
                 }
-                
+
                 console.log('VRMA animation finished, transitioning to default pose');
                 this.isTransitioning = true;
-                
+
+                // 🔧 修復：徹底清除結束的動畫
                 if (this.currentIdleAction) {
-                    this.currentIdleAction.fadeOut(1.0);
+                    const finishedAction = this.currentIdleAction;
+                    const finishedClip = finishedAction.getClip();
+
+                    finishedAction.fadeOut(0.5);
+
+                    // 在 fadeOut 完成後停止並清除
+                    setTimeout(() => {
+                        finishedAction.stop();
+                        finishedAction.reset();
+                        this.mixer.uncacheAction(finishedClip);
+                        this.mixer.uncacheClip(finishedClip);
+                        console.log('🧹 Finished animation fully cleaned');
+                    }, 500);
+
+                    this.currentIdleAction = null;
                 }
-                
+
                 if (this.defaultPoseAction) {
                     this.defaultPoseAction.reset();
                     this.defaultPoseAction.setEffectiveWeight(0);
                     this.defaultPoseAction.play();
                     this.defaultPoseAction.fadeIn(this.transitionDuration * 0.5);
-                    
+
                     setTimeout(() => {
                         if (this.defaultPoseAction) {
                             this.defaultPoseAction.setEffectiveWeight(this.idleWeight);
                         }
                     }, this.transitionDuration * 250);
                 }
-                
+
                 setTimeout(() => {
                     if (this.currentMode !== 'vrma' || !this.isActive) {
                         this.isTransitioning = false;
                         return;
                     }
-                    
+
                     setTimeout(() => {
                         if (this.currentMode !== 'vrma' || !this.isActive) {
                             this.isTransitioning = false;
                             return;
                         }
-                        
+
                         if (this.defaultPoseAction) {
                             this.defaultPoseAction.fadeOut(this.transitionDuration * 0.3);
                         }
-                        
+
                         this.isTransitioning = false;
-                        
+
                         setTimeout(() => {
                             if (this.currentMode === 'vrma' && this.isActive) {
                                 this.playNextVRMAAnimation();
                             }
                         }, 300);
-                        
+
                     }, this.pauseBetweenAnimations * 1000);
-                    
+
                 }, this.transitionDuration * 600);
             }
             
@@ -1133,17 +1168,27 @@
             stopVRMAAnimations() {
                 console.log('Stopping VRMA animations only');
                 const fadeTime = 0.5;
-                
-                if (this.currentIdleAction && this.currentIdleAction.isRunning()) {
-                    this.currentIdleAction.fadeOut(fadeTime);
+
+                // 🔧 修復：停止並清除 VRMA 動畫
+                if (this.currentIdleAction) {
+                    const action = this.currentIdleAction;
+                    const clip = action.getClip();
+
+                    if (action.isRunning()) {
+                        action.fadeOut(fadeTime);
+                    }
+
                     setTimeout(() => {
-                        if (this.currentIdleAction) {
-                            this.currentIdleAction.stop();
-                            this.currentIdleAction = null;
-                        }
+                        action.stop();
+                        action.reset();
+                        this.mixer.uncacheAction(clip);
+                        this.mixer.uncacheClip(clip);
+                        console.log('🧹 VRMA animation cleaned in stopVRMA');
                     }, fadeTime * 1000);
+
+                    this.currentIdleAction = null;
                 }
-                
+
                 if (this.defaultPoseAction && this.defaultPoseAction.isRunning()) {
                     this.defaultPoseAction.fadeOut(fadeTime);
                 }
@@ -1167,19 +1212,29 @@
                 console.log('Stopping all idle animations');
                 this.isActive = false;
                 this.isTransitioning = false;
-                
+
                 const fadeTime = 0.5;
-                
-                if (this.currentIdleAction && this.currentIdleAction.isRunning()) {
-                    this.currentIdleAction.fadeOut(fadeTime);
+
+                // 🔧 修復：停止並清除 VRMA 動畫
+                if (this.currentIdleAction) {
+                    const action = this.currentIdleAction;
+                    const clip = action.getClip();
+
+                    if (action.isRunning()) {
+                        action.fadeOut(fadeTime);
+                    }
+
                     setTimeout(() => {
-                        if (this.currentIdleAction) {
-                            this.currentIdleAction.stop();
-                            this.currentIdleAction = null;
-                        }
+                        action.stop();
+                        action.reset();
+                        this.mixer.uncacheAction(clip);
+                        this.mixer.uncacheClip(clip);
+                        console.log('🧹 Current idle action cleaned in stopAll');
                     }, fadeTime * 1000);
+
+                    this.currentIdleAction = null;
                 }
-                
+
                 if (this.proceduralIdleAction && this.proceduralIdleAction.isRunning()) {
                     this.proceduralIdleAction.fadeOut(fadeTime);
                     setTimeout(() => {
@@ -1188,7 +1243,7 @@
                         }
                     }, fadeTime * 1000);
                 }
-                
+
                 if (this.defaultPoseAction && this.defaultPoseAction.isRunning()) {
                     this.defaultPoseAction.fadeOut(fadeTime);
                     setTimeout(() => {
@@ -1197,7 +1252,7 @@
                         }
                     }, fadeTime * 1000);
                 }
-                
+
                 this.currentMode = 'none';
             }
         }
