@@ -516,6 +516,16 @@
             </div>
 
             <div class="form-group">
+                <label style="display: flex; align-items: center; cursor: pointer; user-select: none;">
+                    <input type="checkbox" id="randomPlayback" checked style="width: 20px; height: 20px; margin-right: 10px; cursor: pointer;">
+                    <span>🎲 隨機播放動畫</span>
+                </label>
+                <div style="margin-top: 8px; padding: 10px; background: #f0f7ff; border-radius: 6px; border: 1px solid #d0e7ff;">
+                    <span id="playbackModeText" style="font-size: 14px; color: #1976d2;">✅ 啟用：動畫將隨機播放</span>
+                </div>
+            </div>
+
+            <div class="form-group">
                 <label>可用的動畫 (勾選要輪播的動畫)</label>
                 <div id="animationsList" style="max-height: 400px; overflow-y: auto;">
                     載入中...
@@ -1260,6 +1270,22 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
         let availableAnimations = [];  // 所有可用的動畫
         let selectedAnimationIds = [];  // 當前選中的動畫ID
 
+        // 監聽隨機播放開關變化
+        function setupRandomPlaybackToggle() {
+            const checkbox = document.getElementById('randomPlayback');
+            const modeText = document.getElementById('playbackModeText');
+
+            checkbox.addEventListener('change', function() {
+                if (this.checked) {
+                    modeText.textContent = '✅ 啟用：動畫將隨機播放';
+                    modeText.style.color = '#1976d2';
+                } else {
+                    modeText.textContent = '⏭️ 停用：動畫將按順序播放';
+                    modeText.style.color = '#f57c00';
+                }
+            });
+        }
+
         async function loadAnimationsList() {
             try {
                 // 加載所有可用動畫
@@ -1274,11 +1300,25 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 // 加載當前配置
                 selectedAnimationIds = configData.selectedMotionIds || [];
 
+                // 加載隨機播放設定
+                const randomPlayback = configData.randomPlayback !== undefined ? configData.randomPlayback : true;
+                const checkbox = document.getElementById('randomPlayback');
+                const modeText = document.getElementById('playbackModeText');
+
+                checkbox.checked = randomPlayback;
+                if (randomPlayback) {
+                    modeText.textContent = '✅ 啟用：動畫將隨機播放';
+                    modeText.style.color = '#1976d2';
+                } else {
+                    modeText.textContent = '⏭️ 停用：動畫將按順序播放';
+                    modeText.style.color = '#f57c00';
+                }
+
                 // 渲染動畫列表
                 renderAnimationsList();
                 updateSelectedAnimationsDisplay();
 
-                console.log(`已加載 ${availableAnimations.length} 個動畫，選中 ${selectedAnimationIds.length} 個`);
+                console.log(`已加載 ${availableAnimations.length} 個動畫，選中 ${selectedAnimationIds.length} 個，隨機播放: ${randomPlayback}`);
             } catch (error) {
                 console.error('載入動畫列表失敗:', error);
                 showAlert('❌ 載入動畫列表失敗: ' + error.message, 'error');
@@ -1357,16 +1397,20 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
 
         async function saveAnimationConfig() {
             try {
+                const randomPlayback = document.getElementById('randomPlayback').checked;
+
                 const response = await fetch('/api/animations/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        selectedMotionIds: selectedAnimationIds
+                        selectedMotionIds: selectedAnimationIds,
+                        randomPlayback: randomPlayback
                     })
                 });
 
                 if (response.ok) {
-                    showAlert(`✅ 動畫設定已儲存 (${selectedAnimationIds.length} 個動畫)`, 'success');
+                    const modeText = randomPlayback ? '隨機播放' : '順序播放';
+                    showAlert(`✅ 動畫設定已儲存 (${selectedAnimationIds.length} 個動畫，${modeText})`, 'success');
                 } else {
                     const error = await response.json();
                     throw new Error(error.detail || '儲存失敗');
@@ -1470,6 +1514,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             await loadTTSConfig();
             await loadAnimationsList();  // 加載動畫列表
             setupExpressionButtons();
+            setupRandomPlaybackToggle();  // 設置隨機播放開關監聽
         }
 
         // 啟動

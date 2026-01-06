@@ -677,6 +677,7 @@ vrm_config = {
     "selectedModelName": "Alice.vrm",  # 新增：選中的模型名稱
     "selectedModelPath": "/vrm/Alice.vrm",  # 新增：選中的模型路徑
     "selectedMotionIds": ["akimbo", "play_fingers", "scratch_head", "stretch"],  # 預設選中所有4個動畫
+    "randomPlayback": True,  # 隨機播放動畫（True=隨機, False=順序）
     "defaultModels": [
         {"id": "alice", "name": "Alice", "path": "/vrm/Alice.vrm", "type": "default"},
         {"id": "bob", "name": "Bob", "path": "/vrm/Bob.vrm", "type": "default"}
@@ -712,6 +713,7 @@ async def get_animation_config():
     """獲取動畫配置"""
     return {
         "selectedMotionIds": vrm_config["selectedMotionIds"],
+        "randomPlayback": vrm_config.get("randomPlayback", True),
         "defaultMotions": vrm_config["defaultMotions"],
         "userMotions": vrm_config["userMotions"]
     }
@@ -724,22 +726,26 @@ async def update_animation_config(config_data: dict):
     if "selectedMotionIds" in config_data:
         vrm_config["selectedMotionIds"] = config_data["selectedMotionIds"]
 
+    if "randomPlayback" in config_data:
+        vrm_config["randomPlayback"] = config_data["randomPlayback"]
+
     # 保存到文件（持久化）
     save_config(vrm_config)
-    
+
     # 🔧 新增：通知前端配置已更新
     try:
         await broadcast_to_vrm({
             "type": "config_updated",
             "data": {
                 "selectedMotionIds": vrm_config["selectedMotionIds"],
+                "randomPlayback": vrm_config.get("randomPlayback", True),
                 "timestamp": int(asyncio.get_event_loop().time() * 1000)
             }
         })
-        print(f"✅ Animation config updated: {vrm_config['selectedMotionIds']}")
+        print(f"✅ Animation config updated: {vrm_config['selectedMotionIds']}, random: {vrm_config.get('randomPlayback', True)}")
     except Exception as e:
         print(f"Warning: Failed to broadcast config update: {e}")
-    
+
     return {"success": True, "config": vrm_config}
 
 @app.get("/api/vrm/config")

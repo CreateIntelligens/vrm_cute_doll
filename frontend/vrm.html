@@ -806,12 +806,13 @@
                 this.idleWeight = 1.0;
                 this.isActive = false;
                 this.currentMode = 'none';
-                
+                this.randomPlayback = true;  // 隨機播放模式（true=隨機, false=順序）
+
                 // 創建默認姿勢動作
                 this.createDefaultPoseAction();
                 // 創建程序化閒置動畫
                 this.createProceduralIdleAction();
-                
+
                 console.log('IdleAnimationManager initialized');
             }
             
@@ -956,18 +957,18 @@
             
             playNextVRMAAnimation() {
                 console.log(`🎮 [DEBUG] playNextVRMAAnimation called - isActive: ${this.isActive}, mode: ${this.currentMode}, queueLength: ${this.animationQueue.length}`);
-                
+
                 if (!this.isActive || this.currentMode !== 'vrma' || this.animationQueue.length === 0) {
                     console.log(`🚫 [DEBUG] Skipping playback - conditions not met`);
                     return;
                 }
-                
+
                 if (this.isTransitioning) {
                     console.log(`⏳ [DEBUG] Still transitioning, retrying in 100ms`);
                     setTimeout(() => this.playNextVRMAAnimation(), 100);
                     return;
                 }
-                
+
                 const animation = this.animationQueue[this.currentIndex];
                 console.log(`🎭 [DEBUG] Playing VRMA animation: ${animation.name} (${this.currentIndex + 1}/${this.animationQueue.length})`);
                 console.log(`📊 [DEBUG] Animation details:`, {
@@ -975,24 +976,30 @@
                     hasAnimation: !!animation.animation,
                     file: animation.file
                 });
-                
+
                 this.playVRMAAnimation(animation);
-                
-                // 隨機選擇下一個動畫（避免重複）
+
+                // 根據 randomPlayback 模式選擇下一個動畫
                 const previousIndex = this.currentIndex;
                 const length = this.animationQueue.length;
 
-                if (length < 2) {
-                    this.currentIndex = 0;
+                if (this.randomPlayback) {
+                    // 🎲 隨機模式：隨機選擇下一個（避免重複）
+                    if (length < 2) {
+                        this.currentIndex = 0;
+                    } else {
+                        let newIndex;
+                        do {
+                            newIndex = Math.floor(Math.random() * length);
+                        } while (newIndex === previousIndex);
+                        this.currentIndex = newIndex;
+                    }
+                    console.log(`🎲 [DEBUG] Random mode - Next animation index: ${this.currentIndex}`);
                 } else {
-                    let newIndex;
-                    do {
-                        newIndex = Math.floor(Math.random() * length);
-                    } while (newIndex === previousIndex);
-                    this.currentIndex = newIndex;
+                    // ⏭️ 順序模式：按順序播放
+                    this.currentIndex = (previousIndex + 1) % length;
+                    console.log(`⏭️ [DEBUG] Sequential mode - Next animation index: ${this.currentIndex}`);
                 }
-                
-                console.log(`🔄 [DEBUG] Next animation index set to: ${this.currentIndex}`);
             }
             
             playVRMAAnimation(animationData) {
@@ -1035,7 +1042,7 @@
                         this.currentIdleAction.setLoop(THREE.LoopOnce);
                         this.currentIdleAction.clampWhenFinished = false;  // 🔧 改為 false，避免停在最後一幀
                         this.currentIdleAction.reset();  // 🔧 確保從頭開始
-                        this.currentIdleAction.fadeIn(1.0);
+                        this.currentIdleAction.fadeIn(0.8);  // ✨ 優化：稍微縮短淡入時間，讓過渡更緊湊
                         this.currentIdleAction.play();
 
                         const onFinished = (event) => {
@@ -1063,7 +1070,7 @@
                     return;
                 }
 
-                console.log('VRMA animation finished, transitioning to default pose');
+                console.log('VRMA animation finished, preparing for next animation');
                 this.isTransitioning = true;
 
                 // 🔧 修復：徹底清除結束的動畫
@@ -1085,18 +1092,9 @@
                     this.currentIdleAction = null;
                 }
 
-                if (this.defaultPoseAction) {
-                    this.defaultPoseAction.reset();
-                    this.defaultPoseAction.setEffectiveWeight(0);
-                    this.defaultPoseAction.play();
-                    this.defaultPoseAction.fadeIn(this.transitionDuration * 0.5);
-
-                    setTimeout(() => {
-                        if (this.defaultPoseAction) {
-                            this.defaultPoseAction.setEffectiveWeight(this.idleWeight);
-                        }
-                    }, this.transitionDuration * 250);
-                }
+                // ✨ 優化：移除中間的默認姿勢過渡，直接播放下一個動畫
+                // 只保留一個短暫的暫停，讓動畫淡出完成
+                const shortPause = 600; // 0.6秒暫停（足夠讓fadeOut完成）
 
                 setTimeout(() => {
                     if (this.currentMode !== 'vrma' || !this.isActive) {
@@ -1104,27 +1102,12 @@
                         return;
                     }
 
-                    setTimeout(() => {
-                        if (this.currentMode !== 'vrma' || !this.isActive) {
-                            this.isTransitioning = false;
-                            return;
-                        }
+                    this.isTransitioning = false;
 
-                        if (this.defaultPoseAction) {
-                            this.defaultPoseAction.fadeOut(this.transitionDuration * 0.3);
-                        }
+                    // 直接播放下一個動畫，使用 fadeIn 實現平滑過渡
+                    this.playNextVRMAAnimation();
 
-                        this.isTransitioning = false;
-
-                        setTimeout(() => {
-                            if (this.currentMode === 'vrma' && this.isActive) {
-                                this.playNextVRMAAnimation();
-                            }
-                        }, 300);
-
-                    }, this.pauseBetweenAnimations * 1000);
-
-                }, this.transitionDuration * 600);
+                }, shortPause);
             }
             
             scheduleNextVRMAAnimation() {
@@ -1266,22 +1249,34 @@
 
             try {
                 console.log('🔄 Reloading animation configuration...');
-                
+
+                // 讀取配置（包括 randomPlayback）
+                const configResponse = await fetch('/api/vrm/config');
+                if (configResponse.ok) {
+                    const data = await configResponse.json();
+                    const config = data.VRMConfig;
+                    const randomPlayback = config.randomPlayback !== undefined ? config.randomPlayback : true;
+
+                    // 更新動畫管理器的隨機播放設定
+                    idleAnimationManager.randomPlayback = randomPlayback;
+                    console.log(`🎲 Random playback mode updated: ${randomPlayback ? 'ON (隨機)' : 'OFF (順序)'}`);
+                }
+
                 // 重新載入動畫配置
                 const animationFiles = await getAnimationFiles();
-                
+
                 // 停止當前動畫
                 idleAnimationManager.stopAllAnimations();
-                
+
                 // 清空當前動畫數據
                 idleAnimations = [];
                 isLoadingAnimations = false;
-                
+
                 // 重新載入動畫
                 if (animationFiles.length > 0) {
                     console.log('📁 Loading new animation configuration...');
                     await loadIdleAnimations();
-                    
+
                     if (idleAnimations.length > 0) {
                         idleAnimationManager.setAnimationQueue(idleAnimations);
                         idleAnimationManager.switchToVRMAMode();
@@ -1294,7 +1289,7 @@
                     console.log('ℹ️  No animations selected, switching to procedural mode');
                     idleAnimationManager.switchToProceduralMode();
                 }
-                
+
             } catch (error) {
                 console.error('❌ Failed to reload animation configuration:', error);
                 // 失敗時回到程序化動畫
@@ -1440,15 +1435,29 @@
                 console.error('Idle animation manager not available');
                 return;
             }
-            
+
+            // 讀取隨機播放配置
+            try {
+                const configResponse = await fetch('/api/vrm/config');
+                if (configResponse.ok) {
+                    const data = await configResponse.json();
+                    const config = data.VRMConfig;
+                    const randomPlayback = config.randomPlayback !== undefined ? config.randomPlayback : true;
+                    idleAnimationManager.randomPlayback = randomPlayback;
+                    console.log(`🎲 Initial random playback mode: ${randomPlayback ? 'ON (隨機)' : 'OFF (順序)'}`);
+                }
+            } catch (error) {
+                console.warn('Failed to load random playback config, using default (random):', error);
+            }
+
             console.log(`Starting idle animation with mode: ${useVRMAIdleAnimations ? 'VRMA' : 'Procedural'}`);
-            
+
             if (useVRMAIdleAnimations) {
                 if (idleAnimations.length === 0) {
                     console.log('Loading VRMA animations...');
                     await loadIdleAnimations();
                 }
-                
+
                 if (idleAnimations.length > 0) {
                     idleAnimationManager.setAnimationQueue(idleAnimations);
                     idleAnimationManager.switchToVRMAMode();
