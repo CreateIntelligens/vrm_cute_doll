@@ -1,9 +1,13 @@
 {
-  "selectedModelId": "alice",
+  "selectedModelId": "user_QQman_fll",
   "selectedModelName": "測試2.vrm",
   "selectedModelPath": "/uploads/測試2.vrm",
   "selectedMotionIds": [
-    "user_VRMA_05"
+    "user_VRMA_01",
+    "user_VRMA_06",
+    "user_VRMA_04",
+    "user_VRMA_05",
+    "user_VRMA_03"
   ],
   "randomPlayback": true,
   "defaultModels": [

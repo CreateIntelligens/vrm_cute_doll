@@ -1016,16 +1016,16 @@
                         const oldAction = this.currentIdleAction;
                         const oldClip = oldAction.getClip();
 
-                        // 停止並重置動作
+                        // 只停止動作，不要 reset（避免骨骼瞬間跳變）
+                        // reset 已經在 onVRMAAnimationFinished 的 fadeOut 之後處理
                         oldAction.stop();
-                        oldAction.reset();
 
                         // 從 mixer 中完全移除舊動畫的快取
                         this.mixer.uncacheAction(oldClip);
                         this.mixer.uncacheClip(oldClip);
 
                         this.currentIdleAction = null;
-                        console.log('✅ Previous animation cleaned');
+                        console.log('✅ Previous animation cleaned (without reset to avoid jump)');
                     }
 
                     // 需要動態匯入 createVRMAnimationClip
@@ -1042,8 +1042,12 @@
                         this.currentIdleAction.setLoop(THREE.LoopOnce);
                         this.currentIdleAction.clampWhenFinished = false;  // 🔧 改為 false，避免停在最後一幀
                         this.currentIdleAction.reset();  // 🔧 確保從頭開始
-                        this.currentIdleAction.fadeIn(0.8);  // ✨ 優化：稍微縮短淡入時間，讓過渡更緊湊
+
+                        // 🎭 使用與舊動畫 fadeOut 相同的時間來 fadeIn，實現平滑的交叉淡入淡出
+                        const crossfadeDuration = 1.2; // 與 onVRMAAnimationFinished 中的設定一致
+                        this.currentIdleAction.fadeIn(crossfadeDuration);
                         this.currentIdleAction.play();
+                        console.log(`🔼 New animation fading in (${crossfadeDuration}s)`);
 
                         const onFinished = (event) => {
                             if (event.action === this.currentIdleAction) {
@@ -1073,29 +1077,34 @@
                 console.log('VRMA animation finished, preparing for next animation');
                 this.isTransitioning = true;
 
-                // 🔧 修復：徹底清除結束的動畫
-                if (this.currentIdleAction) {
-                    const finishedAction = this.currentIdleAction;
-                    const finishedClip = finishedAction.getClip();
+                // 🎭 交叉淡入淡出（Crossfade）策略：
+                // 舊動畫開始淡出的同時，立即播放新動畫並淡入
+                // 這樣可以避免中間出現 T-pose 的空檔期
 
-                    finishedAction.fadeOut(0.5);
+                const oldAction = this.currentIdleAction;
+                const crossfadeDuration = 1.2; // 交叉淡入淡出持續時間（秒）
 
-                    // 在 fadeOut 完成後停止並清除
+                if (oldAction) {
+                    // 開始淡出舊動畫
+                    oldAction.fadeOut(crossfadeDuration);
+                    console.log(`🔽 Old animation fading out (${crossfadeDuration}s)`);
+
+                    // 在淡出完成後清理舊動畫
+                    const oldClip = oldAction.getClip();
                     setTimeout(() => {
-                        finishedAction.stop();
-                        finishedAction.reset();
-                        this.mixer.uncacheAction(finishedClip);
-                        this.mixer.uncacheClip(finishedClip);
-                        console.log('🧹 Finished animation fully cleaned');
-                    }, 500);
-
-                    this.currentIdleAction = null;
+                        oldAction.stop();
+                        oldAction.reset();
+                        this.mixer.uncacheAction(oldClip);
+                        this.mixer.uncacheClip(oldClip);
+                        console.log('🧹 Old animation cleaned after fadeout');
+                    }, crossfadeDuration * 1000 + 100); // 多等 100ms 確保淡出完成
                 }
 
-                // ✨ 優化：移除中間的默認姿勢過渡，直接播放下一個動畫
-                // 只保留一個短暫的暫停，讓動畫淡出完成
-                const shortPause = 600; // 0.6秒暫停（足夠讓fadeOut完成）
+                // 立即清空 currentIdleAction，讓新動畫可以播放
+                this.currentIdleAction = null;
 
+                // 🔑 關鍵：立即開始播放新動畫（與舊動畫的淡出重疊）
+                // 只需要極短的延遲（100ms）讓淡出開始
                 setTimeout(() => {
                     if (this.currentMode !== 'vrma' || !this.isActive) {
                         this.isTransitioning = false;
@@ -1104,10 +1113,10 @@
 
                     this.isTransitioning = false;
 
-                    // 直接播放下一個動畫，使用 fadeIn 實現平滑過渡
+                    // 播放下一個動畫，它會以 crossfadeDuration 的時間淡入
                     this.playNextVRMAAnimation();
 
-                }, shortPause);
+                }, 100); // 極短延遲，確保舊動畫開始淡出
             }
             
             scheduleNextVRMAAnimation() {
