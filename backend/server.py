@@ -490,6 +490,7 @@ async def stream_speak(request: SpeakRequest):
                         cc = opencc.OpenCC('t2s')
                         processed_text = cc.convert(chunk)
                         processed_text = processed_text.replace("著", "着")
+                        processed_text = processed_text.replace("顯着", "顯著")
                     except: pass
                 print(f"    Processed text for Index TTS: {processed_text[:30]}...")
                 async with aiohttp.ClientSession() as session:
