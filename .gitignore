@@ -1,0 +1,17 @@
+# Ignore runtime configuration
+data/vrm_config.json
+
+# Ignore uploaded files
+uploads/
+backend/uploads/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv
+env/
+venv/
+
+# Docker
+.env

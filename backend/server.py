@@ -3,6 +3,7 @@ import json
 import asyncio
 from typing import List, Optional
 from pathlib import Path
+from contextlib import asynccontextmanager
 
 import edge_tts
 import aiohttp
@@ -29,8 +30,83 @@ FRONTEND_DIR = BASE_DIR / "frontend"
 VRM_DIR.mkdir(exist_ok=True)
 UPLOADS_DIR.mkdir(exist_ok=True)
 
-# FastAPI 應用
-app = FastAPI(title="VRM Agent API")
+# TTS 隊列系統
+class SpeechTask:
+    def __init__(self, type: str, data: dict, future: asyncio.Future):
+        self.type = type  # "speak" or "stream"
+        self.data = data
+        self.future = future
+
+speech_queue: asyncio.Queue = asyncio.Queue()
+cancel_event: asyncio.Event = asyncio.Event()
+
+# ============= 隊列處理 Worker =============
+
+async def process_speech_queue():
+    """背景任務：依序處理語音請求"""
+    print("🚀 Speech queue worker started")
+    while True:
+        try:
+            # 等待下一個任務
+            task = await speech_queue.get()
+            
+            # 清除之前的取消信號 (如果有的話)，準備處理新任務
+            # 注意：這裡我們不清除，因為如果使用者按了停止，應該連隊列中的都不播
+            # 但如果隊列是空的，當新任務來時，應該要重置狀態
+            if cancel_event.is_set():
+                 # 只有當隊列為空時才重置，或者我們定義 reset 是「清空當前所有」
+                 # 簡單策略：每次開始處理新任務前，先檢查是否被取消了
+                 # 但這樣會導致 reset 後的新請求無法播放
+                 # 正確策略：reset 發生時會清空 queue，所以這裡拿到的 task 肯定是新的
+                 cancel_event.clear()
+
+            print(f"📥 Processing speech task: {task.type}")
+            
+            try:
+                if task.type == "speak":
+                    # 處理單句 speak
+                    req = task.data
+                    result = await process_speak_internal(req["text"], req["expression"], req["engine"])
+                    if not task.future.done():
+                        task.future.set_result(result)
+                        
+                elif task.type == "stream":
+                    # 處理流式 stream-speak
+                    req = task.data
+                    result = await process_stream_speak_internal(req["text"], req["expression"], req["engine"])
+                    if not task.future.done():
+                        task.future.set_result(result)
+                        
+            except Exception as e:
+                print(f"❌ Error processing speech task: {e}")
+                if not task.future.done():
+                    task.future.set_exception(e)
+            finally:
+                speech_queue.task_done()
+                
+        except asyncio.CancelledError:
+            print("🛑 Speech queue worker stopped")
+            break
+        except Exception as e:
+            print(f"❌ Fatal worker error: {e}")
+            await asyncio.sleep(1) # 防止死循環狂刷
+
+# ============= Lifespan (取代 Startup/Shutdown events) =============
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    worker_task = asyncio.create_task(process_speech_queue())
+    yield
+    # Shutdown
+    worker_task.cancel()
+    try:
+        await worker_task
+    except asyncio.CancelledError:
+        pass
+
+# FastAPI 應用 (定義在 add_middleware 之前)
+app = FastAPI(title="VRM Agent API", lifespan=lifespan)
 
 # CORS 設定
 app.add_middleware(
@@ -63,14 +139,26 @@ tts_config = {
 def load_config():
     """從文件加載配置"""
     config_file = BASE_DIR / "data" / "vrm_config.json"
+    default_config_file = BASE_DIR / "data" / "vrm_config.default.json"
+    
     try:
+        # 1. 嘗試讀取執行時配置
         if config_file.exists():
             with open(config_file, "r", encoding="utf-8") as f:
                 loaded_config = json.load(f)
                 print(f"✅ Config loaded from {config_file}")
                 return loaded_config
+        
+        # 2. 如果不存在，嘗試讀取預設配置
+        elif default_config_file.exists():
+            with open(default_config_file, "r", encoding="utf-8") as f:
+                loaded_config = json.load(f)
+                print(f"ℹ️ Runtime config not found, loaded defaults from {default_config_file}")
+                # 可選：自動複製一份變成執行時配置，或者等第一次保存時再建立
+                return loaded_config
+                
         else:
-            print(f"⚠️ Config file not found, using defaults")
+            print(f"⚠️ No config file found, using hardcoded defaults")
             return None
     except Exception as e:
         print(f"❌ Failed to load config: {e}")
@@ -316,6 +404,93 @@ async def speak(request: SpeakRequest):
     text = request.text
     expression = request.expression
     
+    # 創建 Future 以等待結果
+    loop = asyncio.get_event_loop()
+    future = loop.create_future()
+    
+    # 加入隊列
+    task = SpeechTask(
+        type="speak",
+        data={
+            "text": text,
+            "expression": expression,
+            "engine": engine
+        },
+        future=future
+    )
+    await speech_queue.put(task)
+    
+    # 等待處理完成
+    try:
+        result = await future
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============= Stream Speak API (Internal Logic Only) =============
+
+def split_text_into_chunks(text: str) -> List[str]:
+    """將長文本切割成短句 (比照前端 admin.html 邏輯)"""
+    import re
+    
+    # 1. 文字清理 (比照前端 splitTTSBuffer 邏輯)
+    # 移除 Markdown 標題 (#)
+    text = re.sub(r'#{1,6}\s', '', text)
+    # 移除 Markdown 格式符號 (*_~`)
+    text = re.sub(r'[*_~`]+', '', text)
+    # 移除列表標記 (- or *)
+    text = re.sub(r'^\s*[-*]\s', '', text, flags=re.MULTILINE)
+    # 移除圖片 ![alt](url)
+    text = re.sub(r'!\\[.*?\\]\(.*?\)', '', text)
+    # 移除連結 [text](url) -> text
+    text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)
+    # 移除常見 Emoji
+    text = re.sub(r'[\U00010000-\U0010ffff]', '', text)
+    # 合併多餘空格
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    if not text:
+        return []
+        
+    # 2. 定義分隔符 (比照前端: "。", "\n", "？", "！", "，", "～", "!", "?", ",", "~")
+    # 使用 regex split 並過濾掉空字串
+    separators = r'[。\n？！，～!?,~]'
+    chunks = [c.strip() for c in re.split(separators, text) if c.strip()]
+    
+    return chunks
+
+@app.post("/api/stream-speak")
+async def stream_speak(request: SpeakRequest):
+    """處理長文本，自動分段並依序推播至前端"""
+    engine = request.engine or tts_config["engine"]
+    text = request.text
+    expression = request.expression
+    
+    # 創建 Future 以等待結果
+    loop = asyncio.get_event_loop()
+    future = loop.create_future()
+    
+    # 加入隊列
+    task = SpeechTask(
+        type="stream",
+        data={
+            "text": text,
+            "expression": expression,
+            "engine": engine
+        },
+        future=future
+    )
+    await speech_queue.put(task)
+    
+    # 等待處理完成
+    try:
+        result = await future
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def process_speak_internal(text, expression, engine):
+    """內部使用的 speak 邏輯"""
     print(f"Speaking: {text[:50]}... (engine: {engine})")
     
     # 生成唯一的 chunk ID
@@ -400,57 +575,20 @@ async def speak(request: SpeakRequest):
                         
                         return {"success": True, "chunkId": chunk_id, "engine": "indextts"}
                     else:
-                        raise HTTPException(status_code=500, detail=f"Index TTS error: {response.status}")
+                        raise Exception(f"Index TTS error: {response.status}")
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Index TTS request failed: {str(e)}")
+            raise Exception(f"Index TTS request failed: {str(e)}")
     
     else:
-        raise HTTPException(status_code=400, detail=f"Unsupported engine: {engine}")
+        raise Exception(f"Unsupported engine: {engine}")
 
-# ============= Stream Speak API (Internal Logic Only) =============
-
-def split_text_into_chunks(text: str) -> List[str]:
-    """將長文本切割成短句 (比照前端 admin.html 邏輯)"""
-    import re
-    
-    # 1. 文字清理 (比照前端 splitTTSBuffer 邏輯)
-    # 移除 Markdown 標題 (#)
-    text = re.sub(r'#{1,6}\s', '', text)
-    # 移除 Markdown 格式符號 (*_~`)
-    text = re.sub(r'[*_~`]+', '', text)
-    # 移除列表標記 (- or *)
-    text = re.sub(r'^\s*[-*]\s', '', text, flags=re.MULTILINE)
-    # 移除圖片 ![alt](url)
-    text = re.sub(r'!\[.*?\]\(.*?\)', '', text)
-    # 移除連結 [text](url) -> text
-    text = re.sub(r'\[(.*?)\]\(.*?\)', r'\1', text)
-    # 移除常見 Emoji
-    text = re.sub(r'[\U00010000-\U0010ffff]', '', text)
-    # 合併多餘空格
-    text = re.sub(r'\s+', ' ', text).strip()
-    
-    if not text:
-        return []
-        
-    # 2. 定義分隔符 (比照前端: "。", "\n", "？", "！", "，", "～", "!", "?", ",", "~")
-    # 使用 regex split 並過濾掉空字串
-    separators = r'[。\n？！，～!?,~]'
-    chunks = [c.strip() for c in re.split(separators, text) if c.strip()]
-    
-    return chunks
-
-@app.post("/api/stream-speak")
-async def stream_speak(request: SpeakRequest):
-    """處理長文本，自動分段並依序推播至前端"""
+async def process_stream_speak_internal(text, expression, engine):
+    """內部使用的 stream-speak 邏輯"""
     import time
     import base64
     
-    text = request.text
-    engine = request.engine or tts_config["engine"]
-    expression = request.expression
-    
     if not text:
-        raise HTTPException(status_code=400, detail="Text is empty")
+        raise Exception("Text is empty")
         
     # 1. 執行分段
     chunks = split_text_into_chunks(text)
@@ -461,6 +599,11 @@ async def stream_speak(request: SpeakRequest):
         
     # 2. 依序處理每個片段並發送 WebSocket
     for i, chunk in enumerate(chunks):
+        # 檢查是否被取消
+        if cancel_event.is_set():
+            print(f"🛑 Task cancelled, stopping at chunk {i}/{len(chunks)}")
+            break
+
         chunk_id = f"stream_{int(time.time() * 1000)}_{i}"
         print(f"  [Chunk {i+1}/{len(chunks)}] Processing: {chunk[:30]}...")
         
@@ -490,7 +633,7 @@ async def stream_speak(request: SpeakRequest):
                         cc = opencc.OpenCC('t2s')
                         processed_text = cc.convert(chunk)
                         processed_text = processed_text.replace("著", "着")
-                        processed_text = processed_text.replace("顯着", "顯著")
+                        processed_text = processed_text.replace("显着", "显著")
                     except: pass
                 print(f"    Processed text for Index TTS: {processed_text[:30]}...")
                 async with aiohttp.ClientSession() as session:
@@ -759,15 +902,32 @@ async def get_vrm_config():
 
 @app.post("/api/reset-expression")
 async def reset_expression(stop_audio: bool = True):
-    """重置所有表情"""
+    """重置所有表情，並可選擇停止音頻"""
     try:
+        # 如果需要停止音頻，則觸發後端中斷機制
+        if stop_audio:
+            print("🛑 Reset requested: Cancelling all speech tasks")
+            # 1. 設定取消標誌，中斷正在執行的 stream loop
+            cancel_event.set()
+            
+            # 2. 清空等待中的隊列
+            while not speech_queue.empty():
+                try:
+                    task = speech_queue.get_nowait()
+                    if not task.future.done():
+                        task.future.set_exception(Exception("Cancelled by user"))
+                    speech_queue.task_done()
+                except asyncio.QueueEmpty:
+                    break
+            print("🗑️ Speech queue drained")
+
         await broadcast_to_vrm({
             "type": "reset_expression",
             "data": {
                 "stopAudio": stop_audio
             }
         })
-        return {"success": True, "message": "表情已重置"}
+        return {"success": True, "message": "表情已重置" + ("，音頻已停止" if stop_audio else "")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"重置失敗: {str(e)}")
 
