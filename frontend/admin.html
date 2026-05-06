@@ -796,9 +796,12 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                     <button class="btn btn-secondary" style="margin-top:10px;" onclick="clearBroadcastSelection()">✖ 清除選定，改為自動</button>
                 </div>
 
-                <!-- 重新授權 -->
+                <!-- 重新授權 / 換憑證 -->
                 <hr style="margin:20px 0;border:none;border-top:1px solid #eee;">
-                <button class="btn btn-secondary" onclick="ytShowStep2()">🔄 重新授權 / 換帳號</button>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                    <button class="btn btn-secondary" onclick="ytShowStep2()">🔄 重新授權 / 換帳號</button>
+                    <button class="btn btn-secondary" onclick="ytShowStep(1)">📄 更換 client_secret.json</button>
+                </div>
             </div>
 
         </div>
