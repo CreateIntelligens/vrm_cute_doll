@@ -1,6 +1,12 @@
 # Ignore runtime configuration
 data/vrm_config.json
 
+# YouTube API Secrets and Tokens
+data/client_secret.json
+data/client_secrets.json
+data/token.pickle
+data/youtube_token.json
+
 # Ignore uploaded files
 uploads/
 backend/uploads/

@@ -1107,6 +1107,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             // 創建播放任務並加入隊列
             const playTask = {
                 id: ++queueIdCounter,
+                rawText: text, // 保存原始含標點的文本
                 chunks: textChunks,
                 engine: engine,
                 expression: selectedExpression,
@@ -1164,47 +1165,47 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
         }
 
         async function playTaskChunks(task) {
-            // 逐個發送片段到後端
-            for (let i = 0; i < task.chunks.length; i++) {
-                // 每次發送前檢查中斷標誌
-                if (isInterrupted) {
-                    console.log(`任務 ${task.id} 因中斷而停止`);
-                    break;
-                }
+            // 重構：不再逐句發送，而是將完整文本（已合併的 chunks）發送給 stream-speak API
+            // 這樣後端可以一次性處理，並發送完整內容給 YouTube，且能依據標點正確分段 TTS
+            
+            const fullText = task.rawText || task.chunks.join('，'); // 優先使用原始文本，否則嘗試用逗號合併
+            console.log(`播放任務 ${task.id} (Stream Mode): ${fullText.substring(0, 30)}...`);
 
-                const chunk = task.chunks[i];
-
-                console.log(`播放任務 ${task.id} 的第 ${i + 1}/${task.chunks.length} 段: ${chunk.substring(0, 30)}...`);
-
-                try {
-                    const response = await fetch('/api/speak', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            text: chunk,
-                            engine: task.engine,
-                            expression: task.expression
-                        })
-                    });
-
-                    if (!response.ok) {
-                        const error = await response.json();
-                        throw new Error(error.detail || '播放失敗');
-                    }
-
-                    // 等待一小段時間讓 VRM 播放
-                    // 注意：這裏的等待只是為了避免發送太快，實際播放時間可能更長
-                    // 如果用戶點了中斷，這個等待也會繼續，但下一次循環會檢查 isInterrupted
-                    await new Promise(resolve => setTimeout(resolve, 500));
-
-                } catch (error) {
-                    console.error(`播放第 ${i + 1} 段失敗:`, error);
-                    throw error;
-                }
+            if (isInterrupted) {
+                console.log(`任務 ${task.id} 因中斷而停止`);
+                return;
             }
 
-            if (!isInterrupted) {
-                console.log(`✅ 任務 ${task.id} 所有片段已發送完成`);
+            try {
+                const response = await fetch('/api/stream-speak', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: fullText,
+                        engine: task.engine,
+                        expression: task.expression
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || '播放失敗');
+                }
+
+                const result = await response.json();
+                console.log(`✅ 任務 ${task.id} stream-speak 請求成功:`, result);
+
+                // 這裡我們不再等待前端播放完畢，因為 stream-speak 是後端推播
+                // 後端的 Queue 機制會確保順序
+                // 但為了 UI 狀態（isAudioPlaying），我們可能需要一個機制知道何時結束
+                // 目前簡化處理：假設請求成功發送就視為任務完成交接給後端
+                
+                // 為了避免過快發送下一個任務（如果有），稍微等待一下
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+            } catch (error) {
+                console.error(`Stream Speak 失敗:`, error);
+                throw error;
             }
         }
 

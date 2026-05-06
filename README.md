@@ -138,6 +138,32 @@ POST /api/animations/config
 ### 自定義動畫
 您可以從 VRoid Hub 或其他來源獲取 `.vrma` 檔案，透過 Admin 後台上傳後即可立即在瀏覽器中看到效果。
 
+## 📺 YouTube 直播聊天室整合 (選填)
+
+本專案支援在 Agent 說話時，自動將文字同步發送到您正在直播的 YouTube 聊天室。
+
+### ⚠️ 安全警告
+**請勿將以下敏感檔案上傳至 GitHub 或公開空間：**
+- `data/client_secret.json`
+- `data/token.pickle`
+- `data/youtube_token.json`
+
+這些檔案包含您的 Google 帳號存取權限。專案已在 `.gitignore` 中設定忽略這些檔案。
+
+### 設定教學
+1. **獲取 OAuth 憑證**：
+   - 前往 [Google Cloud Console](https://console.cloud.google.com/)。
+   - 啟用 **YouTube Data API v3**。
+   - 建立 **OAuth 2.0 Client ID** (類型選 `Desktop App`)。
+   - 下載 JSON 檔案，重新命名為 `client_secret.json` 並放入 `data/` 目錄。
+
+2. **生成授權 Token**：
+   - 若您已有 `token.pickle`，請直接放入 `data/` 目錄。
+   - 若無，請在有瀏覽器的電腦執行 `backend/setup_youtube.py` 來進行登入授權，生成 `youtube_token.json` 後放入伺服器的 `data/`。
+
+3. **運作方式**：
+   - 只要 `data/` 目錄下存在有效的憑證，且您的帳號正在進行 **活躍直播 (Active Live Stream)**，系統就會在您呼叫 `/api/speak` 或 `/api/stream-speak` 時自動發送訊息。
+
 ---
 
 **享受你的 VRM 桌面寵物體驗！** 🎉
