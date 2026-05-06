@@ -7,9 +7,9 @@ from contextlib import asynccontextmanager
 
 import edge_tts
 import aiohttp
-from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -23,6 +23,9 @@ except ImportError:
 
 # 目前選定的 live chat ID（None = 自動選第一個活躍直播）
 selected_live_chat_id: Optional[str] = None
+
+# 暫存 OAuth state（key=state, value=redirect_uri）
+youtube_oauth_state: dict = {}
 
 try:
     import opencc
@@ -818,31 +821,121 @@ async def reset_expression(stop_audio: bool = True):
 
 # ============= YouTube APIs =============
 
+def _find_client_secret():
+    """找到 client_secret.json 的路徑，找不到回傳 None"""
+    for name in ["client_secret.json", "client_secrets.json"]:
+        p = BASE_DIR / "data" / name
+        if p.exists():
+            return p
+    return None
+
 @app.get("/api/youtube/status")
 async def youtube_status():
-    """回傳 YouTube 連線狀態與帳號資訊"""
+    """回傳 YouTube 連線狀態、帳號資訊、以及是否有 client_secret"""
+    has_secret = _find_client_secret() is not None
+    status = {"has_client_secret": has_secret, "connected": False, "selected_chat_id": selected_live_chat_id}
+
     if not YOUTUBE_AVAILABLE:
-        return {"connected": False, "reason": "youtube_client not installed"}
+        return {**status, "reason": "youtube_client not installed"}
 
     token_json = BASE_DIR / "data" / "youtube_token.json"
     token_pickle = BASE_DIR / "data" / "token.pickle"
     if not token_json.exists() and not token_pickle.exists():
-        return {"connected": False, "reason": "no_token"}
+        return {**status, "reason": "no_token"}
 
     try:
         youtube = await asyncio.to_thread(get_authenticated_service)
         if not youtube:
-            return {"connected": False, "reason": "auth_failed"}
+            return {**status, "reason": "auth_failed"}
 
-        # 取得頻道名稱
         resp = await asyncio.to_thread(
             lambda: youtube.channels().list(part="snippet", mine=True).execute()
         )
         items = resp.get("items", [])
         channel_name = items[0]["snippet"]["title"] if items else "未知頻道"
-        return {"connected": True, "channel": channel_name, "selected_chat_id": selected_live_chat_id}
+        return {**status, "connected": True, "channel": channel_name}
     except Exception as e:
-        return {"connected": False, "reason": str(e)}
+        return {**status, "reason": str(e)}
+
+@app.post("/api/youtube/upload-secret")
+async def youtube_upload_secret(file: UploadFile = File(...)):
+    """上傳 client_secret.json"""
+    if not file.filename.endswith(".json"):
+        raise HTTPException(status_code=400, detail="請上傳 JSON 檔案")
+    content = await file.read()
+    try:
+        parsed = json.loads(content)
+        # 簡單驗證格式
+        if "installed" not in parsed and "web" not in parsed:
+            raise HTTPException(status_code=400, detail="不是有效的 OAuth client_secret.json 格式")
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="無效的 JSON 格式")
+
+    dest = BASE_DIR / "data" / "client_secret.json"
+    dest.parent.mkdir(exist_ok=True)
+    dest.write_bytes(content)
+    return {"success": True}
+
+@app.get("/api/youtube/auth-url")
+async def youtube_auth_url(request: Request):
+    """產生 Google OAuth 授權連結"""
+    secret_path = _find_client_secret()
+    if not secret_path:
+        raise HTTPException(status_code=404, detail="找不到 client_secret.json，請先上傳")
+
+    try:
+        from google_auth_oauthlib.flow import Flow
+        redirect_uri = str(request.base_url).rstrip("/") + "/api/youtube/oauth-callback"
+        flow = Flow.from_client_secrets_file(
+            str(secret_path),
+            scopes=["https://www.googleapis.com/auth/youtube.force-ssl"],
+            redirect_uri=redirect_uri,
+        )
+        auth_url, state = flow.authorization_url(access_type="offline", prompt="consent")
+        youtube_oauth_state[state] = redirect_uri
+        return {"auth_url": auth_url, "redirect_uri": redirect_uri}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/youtube/oauth-callback")
+async def youtube_oauth_callback(code: str = None, state: str = None, error: str = None):
+    """Google OAuth 回調，儲存 token 後顯示結果頁"""
+    fail_html = lambda msg: HTMLResponse(f"""
+    <html><body style="font-family:sans-serif;padding:40px;text-align:center">
+    <h2>❌ 授權失敗</h2><p>{msg}</p>
+    <script>setTimeout(()=>window.close(),3000)</script>
+    </body></html>""")
+
+    if error:
+        return fail_html(f"Google 回傳錯誤：{error}")
+    if not code or not state or state not in youtube_oauth_state:
+        return fail_html("無效的授權請求")
+
+    redirect_uri = youtube_oauth_state.pop(state)
+    secret_path = _find_client_secret()
+    if not secret_path:
+        return fail_html("找不到 client_secret.json")
+
+    try:
+        from google_auth_oauthlib.flow import Flow
+        flow = Flow.from_client_secrets_file(
+            str(secret_path),
+            scopes=["https://www.googleapis.com/auth/youtube.force-ssl"],
+            redirect_uri=redirect_uri,
+            state=state,
+        )
+        flow.fetch_token(code=code)
+        creds = flow.credentials
+        token_path = BASE_DIR / "data" / "youtube_token.json"
+        token_path.write_text(creds.to_json())
+        return HTMLResponse("""
+    <html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#d4edda">
+    <h2>✅ YouTube 授權成功！</h2>
+    <p>Token 已儲存，此視窗將自動關閉。</p>
+    <script>setTimeout(()=>window.close(),2000)</script>
+    </body></html>""")
+    except Exception as e:
+        return fail_html(str(e))
 
 @app.get("/api/youtube/broadcasts")
 async def youtube_broadcasts():
