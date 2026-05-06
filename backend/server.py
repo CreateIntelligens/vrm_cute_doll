@@ -877,15 +877,16 @@ async def youtube_upload_secret(file: UploadFile = File(...)):
     return {"success": True}
 
 @app.get("/api/youtube/auth-url")
-async def youtube_auth_url(request: Request):
-    """產生 Google OAuth 授權連結"""
+async def youtube_auth_url(request: Request, origin: str = None):
+    """產生 Google OAuth 授權連結，origin 由前端傳入（window.location.origin）"""
     secret_path = _find_client_secret()
     if not secret_path:
         raise HTTPException(status_code=404, detail="找不到 client_secret.json，請先上傳")
 
     try:
         from google_auth_oauthlib.flow import Flow
-        redirect_uri = str(request.base_url).rstrip("/") + "/api/youtube/oauth-callback"
+        base = (origin or str(request.base_url)).rstrip("/")
+        redirect_uri = base + "/api/youtube/oauth-callback"
         flow = Flow.from_client_secrets_file(
             str(secret_path),
             scopes=["https://www.googleapis.com/auth/youtube.force-ssl"],

@@ -1741,7 +1741,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
         function ytShowStep2() {
             ytShowStep(2);
             // 預先載入 redirect URI 供使用者複製
-            fetch('/api/youtube/auth-url').then(r => r.json()).then(data => {
+            fetch(`/api/youtube/auth-url?origin=${encodeURIComponent(window.location.origin)}`).then(r => r.json()).then(data => {
                 document.getElementById('ytRedirectUri').textContent = data.redirect_uri || '載入失敗';
             }).catch(() => {
                 document.getElementById('ytRedirectUri').textContent = window.location.origin + '/api/youtube/oauth-callback';
@@ -1816,7 +1816,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
 
         async function connectYouTube() {
             try {
-                const res = await fetch('/api/youtube/auth-url');
+                const res = await fetch(`/api/youtube/auth-url?origin=${encodeURIComponent(window.location.origin)}`);
                 if (!res.ok) {
                     const err = await res.json();
                     throw new Error(err.detail);
