@@ -21,8 +21,11 @@ except ImportError:
     def send_chat_message(text): pass
     YOUTUBE_AVAILABLE = False
 
-# 目前選定的 live chat ID（None = 自動選第一個活躍直播）
+# 目前選定的 live chat ID（None = 不發送）
 selected_live_chat_id: Optional[str] = None
+
+# YouTube 整合開關
+youtube_enabled: bool = False
 
 # 暫存 OAuth state（key=state, value=redirect_uri）
 youtube_oauth_state: dict = {}
@@ -536,7 +539,8 @@ async def speak(request: SpeakRequest):
     expression = request.expression
     
     # 🚀 非同步發送 YouTube 訊息 (Fire-and-forget)
-    asyncio.create_task(asyncio.to_thread(send_chat_message, text, selected_live_chat_id))
+    if youtube_enabled and selected_live_chat_id:
+        asyncio.create_task(asyncio.to_thread(send_chat_message, text, selected_live_chat_id))
 
     # 創建 Future 以等待結果
     loop = asyncio.get_event_loop()
@@ -568,7 +572,8 @@ async def stream_speak(request: SpeakRequest):
     expression = request.expression
     
     # 🚀 非同步發送 YouTube 訊息 (使用完整長文)
-    asyncio.create_task(asyncio.to_thread(send_chat_message, text, selected_live_chat_id))
+    if youtube_enabled and selected_live_chat_id:
+        asyncio.create_task(asyncio.to_thread(send_chat_message, text, selected_live_chat_id))
 
     # 創建 Future 以等待結果
     loop = asyncio.get_event_loop()
@@ -833,7 +838,7 @@ def _find_client_secret():
 async def youtube_status():
     """回傳 YouTube 連線狀態、帳號資訊、以及是否有 client_secret"""
     has_secret = _find_client_secret() is not None
-    status = {"has_client_secret": has_secret, "connected": False, "selected_chat_id": selected_live_chat_id}
+    status = {"has_client_secret": has_secret, "connected": False, "selected_chat_id": selected_live_chat_id, "youtube_enabled": youtube_enabled}
 
     if not YOUTUBE_AVAILABLE:
         return {**status, "reason": "youtube_client not installed"}
@@ -972,10 +977,17 @@ async def youtube_broadcasts():
 
 @app.post("/api/youtube/set-broadcast")
 async def youtube_set_broadcast(data: dict):
-    """設定要使用的直播聊天室（chat_id），傳 null 表示自動選"""
+    """設定要使用的直播聊天室（chat_id），傳 null 表示不發送"""
     global selected_live_chat_id
     selected_live_chat_id = data.get("chat_id")
     return {"success": True, "selected_chat_id": selected_live_chat_id}
+
+@app.post("/api/youtube/toggle")
+async def youtube_toggle(data: dict):
+    """開啟或關閉 YouTube 整合"""
+    global youtube_enabled
+    youtube_enabled = bool(data.get("enabled", False))
+    return {"success": True, "youtube_enabled": youtube_enabled}
 
 # ============= Health Check =============
 

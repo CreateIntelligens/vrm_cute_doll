@@ -499,6 +499,50 @@
 
         .broadcast-status-badge.active { background: #d4edda; color: #155724; }
         .broadcast-status-badge.upcoming { background: #fff3cd; color: #856404; }
+
+        /* Toggle Switch */
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 52px;
+            height: 28px;
+            flex-shrink: 0;
+        }
+
+        .toggle-switch input { display: none; }
+
+        .toggle-slider {
+            position: absolute;
+            inset: 0;
+            background: #ccc;
+            border-radius: 28px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            left: 4px;
+            top: 4px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+        }
+
+        .toggle-switch input:checked + .toggle-slider { background: #28a745; }
+        .toggle-switch input:checked + .toggle-slider::before { transform: translateX(24px); }
     </style>
 </head>
 <body>
@@ -727,6 +771,18 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
         <div class="card">
             <h2>📺 YouTube 直播整合</h2>
 
+            <!-- YouTube 整合開關 -->
+            <div class="toggle-row">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="ytEnabledToggle" onchange="toggleYouTube(this.checked)">
+                    <span class="toggle-slider"></span>
+                </label>
+                <div>
+                    <strong id="ytToggleLabel">YouTube 整合：關閉</strong>
+                    <div style="font-size:13px;color:#666;margin-top:2px;">開啟後，說話時才會同步發送訊息到直播聊天室</div>
+                </div>
+            </div>
+
             <!-- 連線狀態列 -->
             <div id="ytStatusBox" class="yt-status-box disconnected" style="margin-bottom:20px;">
                 <div id="ytDot" class="yt-dot off"></div>
@@ -779,7 +835,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 <div class="form-group">
                     <label>選擇要發送聊天訊息的直播間</label>
                     <div style="padding:10px;background:#fff3cd;border-radius:8px;font-size:13px;margin-bottom:12px;">
-                        💡 未選擇時，系統會自動使用第一個活躍直播。
+                        💡 必須選定一個直播間，且上方開關開啟，才會發送訊息。
                     </div>
                     <button class="btn btn-success" style="margin-bottom:12px;" onclick="loadBroadcasts()">📡 載入直播列表</button>
                     <div id="broadcastList">
@@ -1762,6 +1818,15 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 const res = await fetch('/api/youtube/status');
                 const data = await res.json();
 
+                // 同步開關狀態
+                const toggle = document.getElementById('ytEnabledToggle');
+                if (toggle) {
+                    toggle.checked = !!data.youtube_enabled;
+                    document.getElementById('ytToggleLabel').textContent =
+                        'YouTube 整合：' + (data.youtube_enabled ? '開啟' : '關閉');
+                    document.getElementById('ytToggleLabel').style.color = data.youtube_enabled ? '#155724' : '';
+                }
+
                 if (data.connected) {
                     box.className = 'yt-status-box connected';
                     dot.className = 'yt-dot on';
@@ -1839,6 +1904,21 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 const connected = await checkYouTubeStatus();
                 if (connected) stopYtPolling();
             }, 3000);
+        }
+
+        async function toggleYouTube(enabled) {
+            try {
+                await fetch('/api/youtube/toggle', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ enabled })
+                });
+                document.getElementById('ytToggleLabel').textContent =
+                    'YouTube 整合：' + (enabled ? '開啟' : '關閉');
+                document.getElementById('ytToggleLabel').style.color = enabled ? '#155724' : '';
+            } catch (e) {
+                showAlert('❌ 設定失敗：' + e.message, 'error');
+            }
         }
 
         function stopYtPolling() {
