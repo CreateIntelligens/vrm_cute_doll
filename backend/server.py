@@ -15,9 +15,14 @@ from pydantic import BaseModel
 
 # 引入 YouTube 客戶端
 try:
-    from youtube_client import send_chat_message
+    from youtube_client import send_chat_message, get_authenticated_service, get_active_live_chat_id
+    YOUTUBE_AVAILABLE = True
 except ImportError:
-    def send_chat_message(text): pass # Fallback
+    def send_chat_message(text): pass
+    YOUTUBE_AVAILABLE = False
+
+# 目前選定的 live chat ID（None = 自動選第一個活躍直播）
+selected_live_chat_id: Optional[str] = None
 
 try:
     import opencc
@@ -528,8 +533,8 @@ async def speak(request: SpeakRequest):
     expression = request.expression
     
     # 🚀 非同步發送 YouTube 訊息 (Fire-and-forget)
-    asyncio.create_task(asyncio.to_thread(send_chat_message, text))
-    
+    asyncio.create_task(asyncio.to_thread(send_chat_message, text, selected_live_chat_id))
+
     # 創建 Future 以等待結果
     loop = asyncio.get_event_loop()
     future = loop.create_future()
@@ -560,8 +565,8 @@ async def stream_speak(request: SpeakRequest):
     expression = request.expression
     
     # 🚀 非同步發送 YouTube 訊息 (使用完整長文)
-    asyncio.create_task(asyncio.to_thread(send_chat_message, text))
-    
+    asyncio.create_task(asyncio.to_thread(send_chat_message, text, selected_live_chat_id))
+
     # 創建 Future 以等待結果
     loop = asyncio.get_event_loop()
     future = loop.create_future()
@@ -810,6 +815,73 @@ async def reset_expression(stop_audio: bool = True):
         return {"success": True, "message": "表情已重置" + ("，音頻已停止" if stop_audio else "")}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"重置失敗: {str(e)}")
+
+# ============= YouTube APIs =============
+
+@app.get("/api/youtube/status")
+async def youtube_status():
+    """回傳 YouTube 連線狀態與帳號資訊"""
+    if not YOUTUBE_AVAILABLE:
+        return {"connected": False, "reason": "youtube_client not installed"}
+
+    token_json = BASE_DIR / "data" / "youtube_token.json"
+    token_pickle = BASE_DIR / "data" / "token.pickle"
+    if not token_json.exists() and not token_pickle.exists():
+        return {"connected": False, "reason": "no_token"}
+
+    try:
+        youtube = await asyncio.to_thread(get_authenticated_service)
+        if not youtube:
+            return {"connected": False, "reason": "auth_failed"}
+
+        # 取得頻道名稱
+        resp = await asyncio.to_thread(
+            lambda: youtube.channels().list(part="snippet", mine=True).execute()
+        )
+        items = resp.get("items", [])
+        channel_name = items[0]["snippet"]["title"] if items else "未知頻道"
+        return {"connected": True, "channel": channel_name, "selected_chat_id": selected_live_chat_id}
+    except Exception as e:
+        return {"connected": False, "reason": str(e)}
+
+@app.get("/api/youtube/broadcasts")
+async def youtube_broadcasts():
+    """列出目前活躍的直播（含已排程的 upcoming）"""
+    if not YOUTUBE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="YouTube not available")
+    try:
+        youtube = await asyncio.to_thread(get_authenticated_service)
+        if not youtube:
+            raise HTTPException(status_code=401, detail="YouTube 未授權")
+
+        result = []
+        for status in ["active", "upcoming"]:
+            resp = await asyncio.to_thread(
+                lambda s=status: youtube.liveBroadcasts().list(
+                    part="snippet",
+                    broadcastStatus=s,
+                    broadcastType="all"
+                ).execute()
+            )
+            for item in resp.get("items", []):
+                result.append({
+                    "id": item["id"],
+                    "title": item["snippet"]["title"],
+                    "chat_id": item["snippet"]["liveChatId"],
+                    "status": status
+                })
+        return {"broadcasts": result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/youtube/set-broadcast")
+async def youtube_set_broadcast(data: dict):
+    """設定要使用的直播聊天室（chat_id），傳 null 表示自動選"""
+    global selected_live_chat_id
+    selected_live_chat_id = data.get("chat_id")
+    return {"success": True, "selected_chat_id": selected_live_chat_id}
 
 # ============= Health Check =============
 

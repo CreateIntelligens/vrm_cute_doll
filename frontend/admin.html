@@ -395,6 +395,110 @@
             margin: 4px;
             font-size: 14px;
         }
+
+        /* ===== Tab System ===== */
+        .tab-nav {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 12px;
+            padding: 6px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 12px 8px;
+            border: none;
+            border-radius: 8px;
+            background: transparent;
+            color: rgba(255,255,255,0.75);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s;
+        }
+
+        .tab-btn:hover {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+
+        .tab-btn.active {
+            background: white;
+            color: #667eea;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        /* ===== YouTube Tab ===== */
+        .yt-status-box {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            border-radius: 10px;
+            background: #f8f9fa;
+            border: 2px solid #e0e0e0;
+            margin-bottom: 20px;
+        }
+
+        .yt-status-box.connected {
+            background: #d4edda;
+            border-color: #28a745;
+        }
+
+        .yt-status-box.disconnected {
+            background: #f8d7da;
+            border-color: #dc3545;
+        }
+
+        .yt-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #aaa;
+            flex-shrink: 0;
+        }
+
+        .yt-dot.on { background: #28a745; }
+        .yt-dot.off { background: #dc3545; }
+
+        .broadcast-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.25s;
+        }
+
+        .broadcast-item:hover { border-color: #667eea; background: #f8f9ff; }
+
+        .broadcast-item.selected {
+            border-color: #667eea;
+            background: #e8eaff;
+        }
+
+        .broadcast-status-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 10px;
+        }
+
+        .broadcast-status-badge.active { background: #d4edda; color: #155724; }
+        .broadcast-status-badge.upcoming { background: #fff3cd; color: #856404; }
     </style>
 </head>
 <body>
@@ -408,7 +512,17 @@
 
         <div id="alertBox" class="alert"></div>
 
+        <!-- Tab 導覽 -->
+        <div class="tab-nav">
+            <button class="tab-btn active" onclick="switchTab('vrm')">📦 VRM 模型</button>
+            <button class="tab-btn" onclick="switchTab('tts')">🔊 TTS 語音</button>
+            <button class="tab-btn" onclick="switchTab('animation')">🎭 動畫</button>
+            <button class="tab-btn" onclick="switchTab('test')">🎮 測試</button>
+            <button class="tab-btn" onclick="switchTab('youtube')">📺 YouTube</button>
+        </div>
+
         <!-- VRM 管理 -->
+        <div class="tab-panel active" id="tab-vrm">
         <div class="card">
             <h2>📦 VRM 模型管理</h2>
             
@@ -436,7 +550,10 @@
             </div>
         </div>
 
+        </div><!-- /tab-panel vrm -->
+
         <!-- TTS 設定 -->
+        <div class="tab-panel" id="tab-tts">
         <div class="card">
             <h2>🔊 TTS 語音設定</h2>
             
@@ -495,7 +612,10 @@
             <button class="btn btn-primary" onclick="saveTTSConfig()">💾 儲存 TTS 設定</button>
         </div>
 
+        </div><!-- /tab-panel tts -->
+
         <!-- 動畫管理 -->
+        <div class="tab-panel" id="tab-animation">
         <div class="card">
             <h2>🎭 動畫管理</h2>
 
@@ -535,7 +655,10 @@
             <button class="btn btn-primary" onclick="saveAnimationConfig()">💾 儲存動畫設定</button>
         </div>
 
+        </div><!-- /tab-panel animation -->
+
         <!-- 測試控制台 -->
+        <div class="tab-panel" id="tab-test">
         <div class="card">
             <h2>🎮 測試控制台</h2>
             
@@ -597,7 +720,51 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 </div>
             </div>
         </div>
-    </div>
+        </div><!-- /tab-panel test -->
+
+        <!-- YouTube 設定 -->
+        <div class="tab-panel" id="tab-youtube">
+        <div class="card">
+            <h2>📺 YouTube 直播整合</h2>
+
+            <!-- 連線狀態 -->
+            <div id="ytStatusBox" class="yt-status-box disconnected">
+                <div id="ytDot" class="yt-dot off"></div>
+                <div>
+                    <strong id="ytStatusText">檢查中...</strong>
+                    <div id="ytChannelName" style="font-size: 13px; color: #666; margin-top: 2px;"></div>
+                </div>
+            </div>
+
+            <!-- 操作按鈕 -->
+            <div class="actions" style="margin-bottom: 24px;">
+                <button class="btn btn-primary" onclick="checkYouTubeStatus()">🔄 重新檢查連線</button>
+                <button class="btn btn-success" onclick="loadBroadcasts()">📡 載入直播列表</button>
+            </div>
+
+            <!-- 直播間選擇 -->
+            <div class="form-group">
+                <label>選擇要發送聊天訊息的直播間</label>
+                <div style="padding: 10px; background: #fff3cd; border-radius: 8px; font-size: 13px; margin-bottom: 12px;">
+                    💡 未選擇時，系統會自動使用第一個活躍直播。選定後重新整理頁面仍會保留（儲存在 server 記憶體，重啟後重置）。
+                </div>
+                <div id="broadcastList">
+                    <div style="color: #999; padding: 12px;">請先點擊「載入直播列表」</div>
+                </div>
+            </div>
+
+            <!-- 目前選定 -->
+            <div class="form-group">
+                <label>目前選定的直播間</label>
+                <div id="selectedBroadcastInfo" style="padding: 12px; background: #f8f9fa; border-radius: 8px; font-size: 14px; color: #666;">
+                    自動（未指定）
+                </div>
+                <button class="btn btn-secondary" style="margin-top: 10px;" onclick="clearBroadcastSelection()">✖ 清除選定，改為自動</button>
+            </div>
+        </div>
+        </div><!-- /tab-panel youtube -->
+
+    </div><!-- /container -->
 
     <script>
         let selectedExpression = null;
@@ -1506,6 +1673,134 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             setTimeout(() => {
                 alertBox.classList.remove('show');
             }, 5000);
+        }
+
+        // ============= Tab 切換 =============
+        function switchTab(name) {
+            document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('tab-' + name).classList.add('active');
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                if (b.getAttribute('onclick') === `switchTab('${name}')`) b.classList.add('active');
+            });
+            if (name === 'youtube') checkYouTubeStatus();
+        }
+
+        // ============= YouTube =============
+        let selectedChatId = null;
+        let selectedBroadcastTitle = null;
+
+        async function checkYouTubeStatus() {
+            const box = document.getElementById('ytStatusBox');
+            const dot = document.getElementById('ytDot');
+            const text = document.getElementById('ytStatusText');
+            const channel = document.getElementById('ytChannelName');
+
+            text.textContent = '檢查中...';
+            try {
+                const res = await fetch('/api/youtube/status');
+                const data = await res.json();
+                if (data.connected) {
+                    box.className = 'yt-status-box connected';
+                    dot.className = 'yt-dot on';
+                    text.textContent = '已連線';
+                    channel.textContent = '頻道：' + data.channel;
+                    if (data.selected_chat_id) {
+                        selectedChatId = data.selected_chat_id;
+                        updateSelectedInfo();
+                    }
+                } else {
+                    box.className = 'yt-status-box disconnected';
+                    dot.className = 'yt-dot off';
+                    const reasons = {
+                        no_token: '尚未設定 YouTube 授權檔案（data/youtube_token.json）',
+                        auth_failed: '授權失敗，Token 可能已過期',
+                    };
+                    text.textContent = '未連線';
+                    channel.textContent = reasons[data.reason] || data.reason;
+                }
+            } catch (e) {
+                text.textContent = '無法連線到後端';
+                channel.textContent = e.message;
+            }
+        }
+
+        async function loadBroadcasts() {
+            const container = document.getElementById('broadcastList');
+            container.innerHTML = '<div style="color:#999; padding:12px;">載入中...</div>';
+            try {
+                const res = await fetch('/api/youtube/broadcasts');
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || '載入失敗');
+                }
+                const data = await res.json();
+                const broadcasts = data.broadcasts;
+
+                if (broadcasts.length === 0) {
+                    container.innerHTML = '<div style="color:#999; padding:12px;">目前沒有進行中或即將開始的直播</div>';
+                    return;
+                }
+
+                container.innerHTML = '';
+                broadcasts.forEach(b => {
+                    const item = document.createElement('div');
+                    item.className = 'broadcast-item' + (b.chat_id === selectedChatId ? ' selected' : '');
+                    item.innerHTML = `
+                        <div>
+                            <div style="font-weight:600;">${b.title}</div>
+                            <div style="font-size:12px; color:#666; margin-top:3px;">Chat ID: ${b.chat_id}</div>
+                        </div>
+                        <span class="broadcast-status-badge ${b.status}">${b.status === 'active' ? '直播中' : '即將開始'}</span>
+                    `;
+                    item.onclick = () => selectBroadcast(b.chat_id, b.title, item);
+                    container.appendChild(item);
+                });
+            } catch (e) {
+                container.innerHTML = `<div style="color:#dc3545; padding:12px;">❌ ${e.message}</div>`;
+            }
+        }
+
+        async function selectBroadcast(chatId, title, el) {
+            try {
+                await fetch('/api/youtube/set-broadcast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: chatId })
+                });
+                selectedChatId = chatId;
+                selectedBroadcastTitle = title;
+                document.querySelectorAll('.broadcast-item').forEach(i => i.classList.remove('selected'));
+                el.classList.add('selected');
+                updateSelectedInfo();
+                showAlert('已選定直播間：' + title, 'success');
+            } catch (e) {
+                showAlert('設定失敗：' + e.message, 'error');
+            }
+        }
+
+        async function clearBroadcastSelection() {
+            await fetch('/api/youtube/set-broadcast', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: null })
+            });
+            selectedChatId = null;
+            selectedBroadcastTitle = null;
+            document.querySelectorAll('.broadcast-item').forEach(i => i.classList.remove('selected'));
+            updateSelectedInfo();
+            showAlert('已清除選定，改為自動模式', 'success');
+        }
+
+        function updateSelectedInfo() {
+            const el = document.getElementById('selectedBroadcastInfo');
+            if (selectedChatId) {
+                el.innerHTML = `<strong>${selectedBroadcastTitle || selectedChatId}</strong><br><span style="font-size:12px; color:#666;">Chat ID: ${selectedChatId}</span>`;
+                el.style.background = '#d4edda';
+            } else {
+                el.textContent = '自動（未指定）';
+                el.style.background = '#f8f9fa';
+            }
         }
 
         // ============= 初始化修改 =============

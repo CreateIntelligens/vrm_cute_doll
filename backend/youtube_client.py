@@ -81,9 +81,8 @@ def get_active_live_chat_id(youtube):
         print(f"⚠️ Error finding live broadcast: {e}")
         return None
 
-def send_chat_message(text):
+def send_chat_message(text, override_chat_id=None):
     """發送訊息到 YouTube 直播聊天室"""
-    # 檢查是否至少有一種憑證存在
     if not TOKEN_FILE_JSON.exists() and not TOKEN_FILE_PICKLE.exists():
         print("ℹ️ Skipping YouTube: No token files found in data/ directory.")
         return
@@ -94,8 +93,8 @@ def send_chat_message(text):
             print("ℹ️ Skipping YouTube: Failed to authenticate or build service.")
             return
 
-        # 1. 找到活躍的直播 ID
-        live_chat_id = get_active_live_chat_id(youtube)
+        # 優先用指定的 chat_id，否則自動找第一個活躍直播
+        live_chat_id = override_chat_id or get_active_live_chat_id(youtube)
         if not live_chat_id:
             print("ℹ️ Skipping YouTube: No active live stream found for this account.")
             return
