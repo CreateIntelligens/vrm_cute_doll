@@ -838,6 +838,9 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                         💡 必須選定一個直播間，且上方開關開啟，才會發送訊息。
                     </div>
                     <button class="btn btn-success" style="margin-bottom:12px;" onclick="loadBroadcasts()">📡 載入直播列表</button>
+                    <div style="padding:10px 14px;background:#f8d7da;border-radius:8px;font-size:13px;color:#721c24;margin-bottom:12px;">
+                        ⚠️ 若直播間關閉或重新開播，請重新點擊「載入直播列表」並重新指定新的直播間。
+                    </div>
                     <div id="broadcastList">
                         <div style="color:#999;padding:12px;">點擊上方按鈕載入目前的直播</div>
                     </div>
@@ -847,9 +850,9 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 <div class="form-group">
                     <label>目前選定的直播間</label>
                     <div id="selectedBroadcastInfo" style="padding:12px;background:#f8f9fa;border-radius:8px;font-size:14px;color:#666;">
-                        自動（未指定）
+                        未指定
                     </div>
-                    <button class="btn btn-secondary" style="margin-top:10px;" onclick="clearBroadcastSelection()">✖ 清除選定，改為自動</button>
+                    <button class="btn btn-secondary" style="margin-top:10px;" onclick="clearBroadcastSelection()">✖ 清除選定</button>
                 </div>
 
                 <!-- 重新授權 / 換憑證 -->
@@ -1985,7 +1988,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             selectedBroadcastTitle = null;
             document.querySelectorAll('.broadcast-item').forEach(i => i.classList.remove('selected'));
             updateSelectedInfo();
-            showAlert('已清除選定，改為自動模式', 'success');
+            showAlert('已清除選定', 'success');
         }
 
         function updateSelectedInfo() {
@@ -1995,7 +1998,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 el.innerHTML = `<strong>${selectedBroadcastTitle || selectedChatId}</strong><br><span style="font-size:12px;color:#666;">Chat ID: ${selectedChatId}</span>`;
                 el.style.background = '#d4edda';
             } else {
-                el.textContent = '自動（未指定）';
+                el.textContent = '未指定';
                 el.style.background = '#f8f9fa';
             }
         }

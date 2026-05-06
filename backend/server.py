@@ -954,10 +954,10 @@ async def youtube_broadcasts():
             raise HTTPException(status_code=401, detail="YouTube 未授權")
 
         result = []
-        for status in ["active", "upcoming"]:
+        for status in ["active"]:
             resp = await asyncio.to_thread(
                 lambda s=status: youtube.liveBroadcasts().list(
-                    part="snippet",
+                    part="snippet,status",
                     broadcastStatus=s,
                     broadcastType="all"
                 ).execute()
