@@ -934,6 +934,10 @@ async def youtube_oauth_callback(code: str = None, state: str = None, error: str
         creds = flow.credentials
         token_path = BASE_DIR / "data" / "youtube_token.json"
         token_path.write_text(creds.to_json())
+        # 換帳號後強制清除已選定的直播間與開關，避免跨帳號發送
+        global selected_live_chat_id, youtube_enabled
+        selected_live_chat_id = None
+        youtube_enabled = False
         return HTMLResponse("""
     <html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#d4edda">
     <h2>✅ YouTube 授權成功！</h2>

@@ -490,6 +490,11 @@
             background: #e8eaff;
         }
 
+        .broadcast-item.pending {
+            border-color: #fd7e14;
+            background: #fff3e0;
+        }
+
         .broadcast-status-badge {
             font-size: 11px;
             font-weight: 700;
@@ -844,6 +849,16 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                     <div id="broadcastList">
                         <div style="color:#999;padding:12px;">點擊上方按鈕載入目前的直播</div>
                     </div>
+                    <!-- 確認綁定區 -->
+                    <div id="ytConfirmBox" style="display:none;margin-top:12px;padding:16px;background:#fff3e0;border:2px solid #fd7e14;border-radius:10px;">
+                        <div style="font-size:14px;margin-bottom:12px;">
+                            確定要綁定直播間：<strong id="ytPendingTitle"></strong>？
+                        </div>
+                        <div style="display:flex;gap:10px;">
+                            <button class="btn btn-success" onclick="confirmBroadcast()">✅ 確認綁定</button>
+                            <button class="btn btn-secondary" onclick="cancelPending()">✖ 取消</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 目前選定 -->
@@ -858,7 +873,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 <!-- 重新授權 / 換憑證 -->
                 <hr style="margin:20px 0;border:none;border-top:1px solid #eee;">
                 <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                    <button class="btn btn-secondary" onclick="ytShowStep2()">🔄 重新授權 / 換帳號</button>
+                    <button class="btn btn-secondary" onclick="confirmReauth()">🔄 重新授權 / 換帳號</button>
                     <button class="btn btn-secondary" onclick="ytShowStep(1)">📄 更換 client_secret.json</button>
                 </div>
             </div>
@@ -1835,8 +1850,10 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                     dot.className = 'yt-dot on';
                     text.textContent = '已連線';
                     channel.textContent = '頻道：' + data.channel;
-                    if (data.selected_chat_id) {
-                        selectedChatId = data.selected_chat_id;
+                    // 同步 server 端的選定狀態（換帳號後 server 會清空）
+                    if (data.selected_chat_id !== selectedChatId) {
+                        selectedChatId = data.selected_chat_id || null;
+                        selectedBroadcastTitle = null;
                         updateSelectedInfo();
                     }
                     ytShowStep(3);
@@ -1909,6 +1926,16 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             }, 3000);
         }
 
+        function confirmReauth() {
+            if (confirm('換帳號後，目前選定的直播間和開關設定會自動清除，需要重新設定。\n\n確定要繼續嗎？')) {
+                selectedChatId = null;
+                selectedBroadcastTitle = null;
+                updateSelectedInfo();
+                cancelPending();
+                ytShowStep2();
+            }
+        }
+
         async function toggleYouTube(enabled) {
             try {
                 await fetch('/api/youtube/toggle', {
@@ -1960,22 +1987,50 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             }
         }
 
-        async function selectBroadcast(chatId, title, el) {
+        let pendingChatId = null;
+        let pendingTitle = null;
+
+        function selectBroadcast(chatId, title, el) {
+            // 第一步：標記為待確認
+            pendingChatId = chatId;
+            pendingTitle = title;
+            document.querySelectorAll('.broadcast-item').forEach(i => {
+                i.classList.remove('selected', 'pending');
+            });
+            el.classList.add('pending');
+            document.getElementById('ytPendingTitle').textContent = title;
+            document.getElementById('ytConfirmBox').style.display = 'block';
+        }
+
+        async function confirmBroadcast() {
+            if (!pendingChatId) return;
             try {
                 await fetch('/api/youtube/set-broadcast', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: chatId })
+                    body: JSON.stringify({ chat_id: pendingChatId })
                 });
-                selectedChatId = chatId;
-                selectedBroadcastTitle = title;
-                document.querySelectorAll('.broadcast-item').forEach(i => i.classList.remove('selected'));
-                el.classList.add('selected');
+                selectedChatId = pendingChatId;
+                selectedBroadcastTitle = pendingTitle;
+                document.querySelectorAll('.broadcast-item').forEach(i => {
+                    i.classList.remove('pending');
+                    if (i.querySelector('div > div')?.textContent === pendingTitle) i.classList.add('selected');
+                });
+                document.getElementById('ytConfirmBox').style.display = 'none';
+                pendingChatId = null;
+                pendingTitle = null;
                 updateSelectedInfo();
-                showAlert('✅ 已選定直播間：' + title, 'success');
+                showAlert('✅ 已綁定直播間：' + selectedBroadcastTitle, 'success');
             } catch (e) {
                 showAlert('❌ 設定失敗：' + e.message, 'error');
             }
+        }
+
+        function cancelPending() {
+            pendingChatId = null;
+            pendingTitle = null;
+            document.querySelectorAll('.broadcast-item').forEach(i => i.classList.remove('pending'));
+            document.getElementById('ytConfirmBox').style.display = 'none';
         }
 
         async function clearBroadcastSelection() {
