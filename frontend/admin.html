@@ -566,7 +566,7 @@
             <button class="tab-btn active" onclick="switchTab('vrm')">📦 VRM 模型</button>
             <button class="tab-btn" onclick="switchTab('tts')">🔊 TTS 語音</button>
             <button class="tab-btn" onclick="switchTab('animation')">🎭 動畫</button>
-            <button class="tab-btn" onclick="switchTab('test')">🎮 測試</button>
+            <button class="tab-btn" onclick="switchTab('test')">🎮 手動播報</button>
             <button class="tab-btn" onclick="switchTab('youtube')">📺 YouTube</button>
         </div>
 
@@ -706,11 +706,23 @@
 
         </div><!-- /tab-panel animation -->
 
-        <!-- 測試控制台 -->
+        <!-- 手動播報 -->
         <div class="tab-panel" id="tab-test">
         <div class="card">
-            <h2>🎮 測試控制台</h2>
-            
+            <h2>🎮 手動播報</h2>
+
+            <!-- 進階設定開關 -->
+            <div class="toggle-row" style="margin-bottom:20px;">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="advancedToggle" onchange="toggleAdvanced(this.checked)">
+                    <span class="toggle-slider"></span>
+                </label>
+                <div>
+                    <strong>進階設定：關閉</strong>
+                    <div style="font-size:13px;color:#666;margin-top:2px;">開啟後顯示表情選擇、重置口型、API 使用說明</div>
+                </div>
+            </div>
+
             <div class="test-panel">
                 <div class="form-group">
                     <label>要說的內容</label>
@@ -727,27 +739,33 @@
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label>選擇表情（可選）</label>
-                    <div class="expression-selector">
-                        <button class="expression-btn" data-expression="happy">😊 開心</button>
-                        <button class="expression-btn" data-expression="angry">😠 生氣</button>
-                        <button class="expression-btn" data-expression="sad">😢 悲傷</button>
-                        <button class="expression-btn" data-expression="neutral">😐 中性</button>
-                        <button class="expression-btn" data-expression="surprised">😲 驚訝</button>
-                        <button class="expression-btn" data-expression="relaxed">😌 放鬆</button>
+                <!-- 進階區塊（預設隱藏） -->
+                <div id="advancedSection" style="display:none;">
+                    <div class="form-group">
+                        <label>選擇表情（可選）</label>
+                        <div class="expression-selector">
+                            <button class="expression-btn" data-expression="happy">😊 開心</button>
+                            <button class="expression-btn" data-expression="angry">😠 生氣</button>
+                            <button class="expression-btn" data-expression="sad">😢 悲傷</button>
+                            <button class="expression-btn" data-expression="neutral">😐 中性</button>
+                            <button class="expression-btn" data-expression="surprised">😲 驚訝</button>
+                            <button class="expression-btn" data-expression="relaxed">😌 放鬆</button>
+                        </div>
                     </div>
                 </div>
 
                 <div class="actions">
                     <button class="btn btn-success" onclick="testSpeak()">🎤 加入播放隊列</button>
                     <button class="btn btn-warning" onclick="interruptTTS()">🛑 中斷並清空隊列</button>
-                    <button class="btn btn-warning" onclick="resetFacialExpression()">😐 重置口型</button>
+                    <div id="resetExpressionBtn" style="display:none;">
+                        <button class="btn btn-warning" onclick="resetFacialExpression()">😐 重置口型</button>
+                    </div>
                     <button class="btn btn-secondary" onclick="clearTest()">🗑️ 清空文字</button>
                 </div>
             </div>
 
-            <div style="margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px;">
+            <!-- API 說明（進階，預設隱藏） -->
+            <div id="apiDocSection" style="display:none;margin-top: 20px; padding: 15px; background: #fff3cd; border-radius: 8px;">
                 <strong>💡 API 使用說明：</strong>
                 <div style="margin-top: 10px;">
                     <strong>基本 TTS API：</strong>
@@ -1934,6 +1952,15 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 cancelPending();
                 ytShowStep2();
             }
+        }
+
+        function toggleAdvanced(enabled) {
+            document.getElementById('advancedSection').style.display = enabled ? 'block' : 'none';
+            document.getElementById('resetExpressionBtn').style.display = enabled ? 'inline-block' : 'none';
+            document.getElementById('apiDocSection').style.display = enabled ? 'block' : 'none';
+            const toggle = document.getElementById('advancedToggle');
+            toggle.closest('.toggle-row').querySelector('strong').textContent =
+                '進階設定：' + (enabled ? '開啟' : '關閉');
         }
 
         async function toggleYouTube(enabled) {
