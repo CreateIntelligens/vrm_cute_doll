@@ -938,6 +938,9 @@ async def youtube_oauth_callback(code: str = None, state: str = None, error: str
         global selected_live_chat_id, youtube_enabled
         selected_live_chat_id = None
         youtube_enabled = False
+        vrm_config["youtubeChatId"] = None
+        vrm_config["youtubeEnabled"] = False
+        save_config(vrm_config)
         return HTMLResponse("""
     <html><body style="font-family:sans-serif;padding:40px;text-align:center;background:#d4edda">
     <h2>✅ YouTube 授權成功！</h2>
@@ -984,6 +987,8 @@ async def youtube_set_broadcast(data: dict):
     """設定要使用的直播聊天室（chat_id），傳 null 表示不發送"""
     global selected_live_chat_id
     selected_live_chat_id = data.get("chat_id")
+    vrm_config["youtubeChatId"] = selected_live_chat_id
+    save_config(vrm_config)
     return {"success": True, "selected_chat_id": selected_live_chat_id}
 
 @app.post("/api/youtube/toggle")
@@ -991,6 +996,8 @@ async def youtube_toggle(data: dict):
     """開啟或關閉 YouTube 整合"""
     global youtube_enabled
     youtube_enabled = bool(data.get("enabled", False))
+    vrm_config["youtubeEnabled"] = youtube_enabled
+    save_config(vrm_config)
     return {"success": True, "youtube_enabled": youtube_enabled}
 
 # ============= Health Check =============
@@ -1031,6 +1038,10 @@ current_vrm = {
     "name": vrm_config.get("selectedModelName", "Alice.vrm"),
     "path": vrm_config.get("selectedModelPath", "/vrm/Alice.vrm")
 }
+
+# 從 config 還原 YouTube 設定
+selected_live_chat_id = vrm_config.get("youtubeChatId") or None
+youtube_enabled = bool(vrm_config.get("youtubeEnabled", False))
 
 # 掛載靜態檔案
 app.mount("/vrm", StaticFiles(directory=str(VRM_DIR)), name="vrm")
