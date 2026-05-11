@@ -5,6 +5,7 @@ WORKDIR /app
 # 安裝系統依賴
 RUN apt-get update && apt-get install -y \
     gcc \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # 複製需求檔案
