@@ -1,3 +1,6 @@
+# IDE / tool settings
+.claude/
+
 # Ignore runtime configuration
 data/vrm_config.json
 
