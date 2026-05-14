@@ -910,7 +910,10 @@ async def youtube_auth_url(request: Request, origin: str = None):
             redirect_uri=redirect_uri,
         )
         auth_url, state = flow.authorization_url(access_type="offline", prompt="consent")
-        youtube_oauth_state[state] = redirect_uri
+        youtube_oauth_state[state] = {
+            "redirect_uri": redirect_uri,
+            "code_verifier": getattr(flow, "code_verifier", None),
+        }
         return {"auth_url": auth_url, "redirect_uri": redirect_uri}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -929,7 +932,9 @@ async def youtube_oauth_callback(code: str = None, state: str = None, error: str
     if not code or not state or state not in youtube_oauth_state:
         return fail_html("無效的授權請求")
 
-    redirect_uri = youtube_oauth_state.pop(state)
+    state_data = youtube_oauth_state.pop(state)
+    redirect_uri = state_data["redirect_uri"]
+    code_verifier = state_data.get("code_verifier")
     secret_path = _find_client_secret()
     if not secret_path:
         return fail_html("找不到 client_secret.json")
@@ -942,7 +947,7 @@ async def youtube_oauth_callback(code: str = None, state: str = None, error: str
             redirect_uri=redirect_uri,
             state=state,
         )
-        flow.fetch_token(code=code)
+        flow.fetch_token(code=code, code_verifier=code_verifier)
         creds = flow.credentials
         token_path = BASE_DIR / "data" / "youtube_token.json"
         token_path.write_text(creds.to_json())
