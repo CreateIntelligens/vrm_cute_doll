@@ -3,6 +3,7 @@
 
 # Ignore runtime configuration
 data/vrm_config.json
+data/indextts_characters.json
 
 # YouTube API Secrets and Tokens
 data/client_secret.json

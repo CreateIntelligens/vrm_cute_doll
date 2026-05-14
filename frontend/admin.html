@@ -653,8 +653,10 @@
                 </div>
 
                 <div class="form-group">
-                    <label>角色名稱</label>
-                    <input type="text" id="indexCharacter" placeholder="hayley">
+                    <label>角色</label>
+                    <select id="indexCharacter">
+                        <option value="">載入中...</option>
+                    </select>
                 </div>
             </div>
 
@@ -1237,7 +1239,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 // Index TTS
                 if (currentConfig.indextts) {
                     document.getElementById('indexServerUrl').value = currentConfig.indextts.server_url;
-                    document.getElementById('indexCharacter').value = currentConfig.indextts.character;
+                    await loadIndexTTSCharacters(currentConfig.indextts.character);
                 }
             } catch (error) {
                 console.error('載入 TTS 設定失敗:', error);
@@ -1248,11 +1250,26 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             document.querySelectorAll('.tts-config').forEach(el => {
                 el.classList.remove('active');
             });
-            
+
             if (engine === 'edgetts') {
                 document.getElementById('edgeTTSConfig').classList.add('active');
             } else if (engine === 'indextts') {
                 document.getElementById('indexTTSConfig').classList.add('active');
+                loadIndexTTSCharacters();
+            }
+        }
+
+        async function loadIndexTTSCharacters(selectedCharacter) {
+            const select = document.getElementById('indexCharacter');
+            try {
+                const res = await fetch('/api/tts/indextts-characters');
+                const characters = await res.json();
+                select.innerHTML = characters.map(c =>
+                    `<option value="${c.id}">${c.name}</option>`
+                ).join('');
+                if (selectedCharacter) select.value = selectedCharacter;
+            } catch {
+                select.innerHTML = '<option value="">載入失敗</option>';
             }
         }
 

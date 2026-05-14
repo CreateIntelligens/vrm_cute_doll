@@ -518,6 +518,17 @@ async def get_tts_config():
     """獲取 TTS 配置"""
     return tts_config
 
+@app.get("/api/tts/indextts-characters")
+async def get_indextts_characters():
+    """獲取 IndexTTS 可用角色列表"""
+    characters_file = BASE_DIR / "data" / "indextts_characters.json"
+    if not characters_file.exists():
+        return []
+    try:
+        return json.loads(characters_file.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
 @app.post("/api/tts/config")
 async def update_tts_config(config: TTSConfig):
     """更新 TTS 配置"""
