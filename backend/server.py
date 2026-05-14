@@ -273,7 +273,7 @@ tts_config = {
         "rate": 1.0
     },
     "indextts": {
-        "server_url": "http://10.9.0.35:8001",
+        "server_url": os.environ.get("INDEXTTS_SERVER_URL", "http://localhost:8001"),
         "character": "hayley"
     }
 }

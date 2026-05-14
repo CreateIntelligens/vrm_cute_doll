@@ -60,8 +60,11 @@ new_agent/
 │   └── admin.html       # 管理後台
 ├── vrm/                 # 預設 VRM 模型檔案
 ├── data/                # 配置目錄
-│   ├── vrm_config.default.json  # 預設配置 (建議納入版本控制)
-│   └── vrm_config.json          # 執行時配置 (已在 .gitignore 中)
+│   ├── vrm_config.default.json           # 預設配置（入版控）
+│   ├── vrm_config.json                   # 執行時配置（.gitignore）
+│   └── indextts_characters.json.example  # IndexTTS 角色列表範本（入版控）
+├── .env.example         # 環境變數範本（入版控）
+├── .env                 # 實際環境變數（.gitignore）
 └── uploads/             # 使用者上傳的模型與動畫
 ```
 
@@ -129,6 +132,37 @@ POST /api/animations/config
 - **口型同步**: `aa` (張嘴), `ih` (閉嘴音素)
 
 ## 🔧 進階設定
+
+### 環境變數（`.env`）
+
+複製範本後填入實際值：
+```bash
+cp .env.example .env
+```
+
+| 變數 | 說明 | 範例 |
+|------|------|------|
+| `INDEXTTS_SERVER_URL` | Index TTS 伺服器地址 | `http://10.9.0.35:8001` |
+
+### Index TTS 角色列表
+
+複製範本後編輯，只放你想開放給操作人員選擇的角色：
+```bash
+cp data/indextts_characters.json.example data/indextts_characters.json
+```
+
+格式：
+```json
+[
+  { "id": "hayley", "name": "Hayley" },
+  { "id": "tom",    "name": "Tom"    }
+]
+```
+
+- `id`：傳給 IndexTTS server 的角色識別名稱
+- `name`：顯示在管理後台下拉選單的標籤
+
+> `indextts_characters.json` 已在 `.gitignore` 中，不會入版控，每台伺服器可各自維護。
 
 ### 配置持久化
 本專案將預設配置與使用者設定分開：

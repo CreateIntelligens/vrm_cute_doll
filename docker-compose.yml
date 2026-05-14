@@ -13,6 +13,8 @@ services:
       - ./vrm:/app/vrm
       - ./data:/app/data
       - vrm_uploads:/app/uploads
+    env_file:
+      - .env
     environment:
       - ENV=production
       - PORT=5456
