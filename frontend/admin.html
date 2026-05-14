@@ -648,11 +648,6 @@
             <!-- Index TTS 設定 -->
             <div id="indexTTSConfig" class="tts-config">
                 <div class="form-group">
-                    <label>伺服器地址</label>
-                    <input type="text" id="indexServerUrl" placeholder="http://localhost:8001">
-                </div>
-
-                <div class="form-group">
                     <label>角色</label>
                     <select id="indexCharacter">
                         <option value="">載入中...</option>
@@ -1238,7 +1233,6 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
 
                 // Index TTS
                 if (currentConfig.indextts) {
-                    document.getElementById('indexServerUrl').value = currentConfig.indextts.server_url;
                     await loadIndexTTSCharacters(currentConfig.indextts.character);
                 }
             } catch (error) {
@@ -1284,7 +1278,6 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                     rate: parseFloat(document.getElementById('edgeRate').value)
                 },
                 indextts: {
-                    server_url: document.getElementById('indexServerUrl').value,
                     character: document.getElementById('indexCharacter').value
                 }
             };

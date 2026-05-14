@@ -537,7 +537,8 @@ async def update_tts_config(config: TTSConfig):
     if config.edgetts:
         tts_config["edgetts"] = config.edgetts
     if config.indextts:
-        tts_config["indextts"] = config.indextts
+        # merge 而非覆蓋，保留 server_url（由 .env 決定，前端不應覆寫）
+        tts_config["indextts"].update(config.indextts)
     return {"success": True, "config": tts_config}
 
 # ============= TTS Speech APIs =============
