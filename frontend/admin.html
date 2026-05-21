@@ -1113,12 +1113,12 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
         async function deleteVRM(event, name, path, type) {
             event.stopPropagation(); // 阻止事件冒泡，避免觸發選擇
 
-            if (currentVRMInfo && currentVRMInfo.path === path) {
-                showAlert(`⚠️ 無法刪除「${name}」：此模型目前正在使用中。請先切換到其他模型，再執行刪除。`, 'error');
-                return;
-            }
+            const isActive = currentVRMInfo && currentVRMInfo.path === path;
+            const message = isActive
+                ? `⚠️ 警告：「${name}」是目前使用中的模型！\n\n刪除後虛擬人將自動切換到預設模型，直播觀眾會看到模型變化。\n\n確定要繼續刪除嗎？`
+                : `確定要刪除模型 "${name}" 嗎？\n此操作無法撤銷。`;
 
-            if (!confirm(`確定要刪除模型 "${name}" 嗎？\n此操作無法撤銷。`)) {
+            if (!confirm(message)) {
                 return;
             }
             
