@@ -901,6 +901,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
     <script>
         let selectedExpression = null;
         let currentConfig = null;
+        let currentVRMInfo = null;
 
         // ============= Edge TTS 語音選項數據 =============
         const edgeTTSVoices = {
@@ -1111,7 +1112,12 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
 
         async function deleteVRM(event, name, path, type) {
             event.stopPropagation(); // 阻止事件冒泡，避免觸發選擇
-            
+
+            if (currentVRMInfo && currentVRMInfo.path === path) {
+                showAlert(`⚠️ 無法刪除「${name}」：此模型目前正在使用中。請先切換到其他模型，再執行刪除。`, 'error');
+                return;
+            }
+
             if (!confirm(`確定要刪除模型 "${name}" 嗎？\n此操作無法撤銷。`)) {
                 return;
             }
@@ -1144,7 +1150,8 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             try {
                 const response = await fetch('/api/vrm/current');
                 const data = await response.json();
-                
+                currentVRMInfo = data;
+
                 document.getElementById('currentVRM').innerHTML = `
                     <strong>${data.name}</strong>
                     <br><small style="color: #666;">${data.path}</small>
