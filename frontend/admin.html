@@ -655,7 +655,7 @@
                 </div>
             </div>
 
-            <button class="btn btn-primary" onclick="saveTTSConfig()">💾 儲存 TTS 設定</button>
+            <button class="btn btn-primary" onclick="saveTTSConfig(this)">💾 儲存 TTS 設定</button>
         </div>
 
         </div><!-- /tab-panel tts -->
@@ -698,7 +698,7 @@
                 </div>
             </div>
 
-            <button class="btn btn-primary" onclick="saveAnimationConfig()">💾 儲存動畫設定</button>
+            <button class="btn btn-primary" onclick="saveAnimationConfig(this)">💾 儲存動畫設定</button>
         </div>
 
         </div><!-- /tab-panel animation -->
@@ -752,10 +752,10 @@
                 </div>
 
                 <div class="actions">
-                    <button class="btn btn-success" onclick="testSpeak()">🎤 加入播放隊列</button>
-                    <button class="btn btn-warning" onclick="interruptTTS()">🛑 中斷並清空隊列</button>
+                    <button class="btn btn-success" onclick="testSpeak(this)">🎤 加入播放隊列</button>
+                    <button class="btn btn-warning" onclick="interruptTTS(this)">🛑 中斷並清空隊列</button>
                     <div id="resetExpressionBtn" style="display:none;">
-                        <button class="btn btn-warning" onclick="resetFacialExpression()">😐 重置口型</button>
+                        <button class="btn btn-warning" onclick="resetFacialExpression(this)">😐 重置口型</button>
                     </div>
                     <button class="btn btn-secondary" onclick="clearTest()">🗑️ 清空文字</button>
                 </div>
@@ -810,7 +810,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                     <strong id="ytStatusText">檢查中...</strong>
                     <div id="ytChannelName" style="font-size:13px;color:#666;margin-top:2px;"></div>
                 </div>
-                <button class="btn btn-secondary" style="margin-left:auto;padding:6px 14px;font-size:13px;" onclick="checkYouTubeStatus()">🔄 重新檢查</button>
+                <button class="btn btn-secondary" style="margin-left:auto;padding:6px 14px;font-size:13px;" onclick="checkYouTubeStatus(this)">🔄 重新檢查</button>
             </div>
 
             <!-- 步驟一：沒有 client_secret.json -->
@@ -841,7 +841,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                     </div>
                     <p style="margin-top:8px;color:#0c5460;">加入後再點下方按鈕。</p>
                 </div>
-                <button class="btn btn-primary" style="font-size:16px;padding:14px 28px;" onclick="connectYouTube()">
+                <button class="btn btn-primary" style="font-size:16px;padding:14px 28px;" onclick="connectYouTube(this)">
                     🔗 連接 YouTube 帳號
                 </button>
                 <div id="ytPollingMsg" style="margin-top:12px;font-size:13px;color:#666;display:none;">
@@ -870,7 +870,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                             確定要綁定直播間：<strong id="ytPendingTitle"></strong>？
                         </div>
                         <div style="display:flex;gap:10px;">
-                            <button class="btn btn-success" onclick="confirmBroadcast()">✅ 確認綁定</button>
+                            <button class="btn btn-success" onclick="confirmBroadcast(this)">✅ 確認綁定</button>
                             <button class="btn btn-secondary" onclick="cancelPending()">✖ 取消</button>
                         </div>
                     </div>
@@ -882,7 +882,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                     <div id="selectedBroadcastInfo" style="padding:12px;background:#f8f9fa;border-radius:8px;font-size:14px;color:#666;">
                         未指定
                     </div>
-                    <button class="btn btn-secondary" style="margin-top:10px;" onclick="clearBroadcastSelection()">✖ 清除選定</button>
+                    <button class="btn btn-secondary" style="margin-top:10px;" onclick="clearBroadcastSelection(this)">✖ 清除選定</button>
                 </div>
 
                 <!-- 重新授權 / 換憑證 -->
@@ -899,6 +899,12 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
     </div><!-- /container -->
 
     <script>
+        async function withLock(btn, fn) {
+            if (btn && btn.disabled) return;
+            if (btn) btn.disabled = true;
+            try { await fn(); } finally { if (btn) btn.disabled = false; }
+        }
+
         let selectedExpression = null;
         let currentConfig = null;
         let currentVRMInfo = null;
@@ -1118,32 +1124,27 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 ? `⚠️ 警告：「${name}」是目前使用中的模型！\n\n刪除後虛擬人將自動切換到預設模型，直播觀眾會看到模型變化。\n\n確定要繼續刪除嗎？`
                 : `確定要刪除模型 "${name}" 嗎？\n此操作無法撤銷。`;
 
-            if (!confirm(message)) {
-                return;
-            }
-            
-            try {
+            if (!confirm(message)) return;
+
+            const btn = event.currentTarget;
+            await withLock(btn, async () => { try {
                 const response = await fetch('/api/vrm/delete', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        name: name,
-                        path: path,
-                        type: type
-                    })
+                    body: JSON.stringify({ name, path, type })
                 });
-                
+
                 if (response.ok) {
                     showAlert('已刪除模型: ' + name, 'success');
-                    await loadVRMList(); // 重新載入列表
-                    await loadCurrentVRM(); // 更新當前模型資訊 (如果被刪除的是當前模型)
+                    await loadVRMList();
+                    await loadCurrentVRM();
                 } else {
                     const error = await response.json();
                     throw new Error(error.detail || '刪除失敗');
                 }
             } catch (error) {
                 showAlert('刪除失敗: ' + error.message, 'error');
-            }
+            } }); // withLock
         }
 
         async function loadCurrentVRM() {
@@ -1274,9 +1275,10 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             }
         }
 
-        async function saveTTSConfig() {
+        async function saveTTSConfig(btn) {
+            await withLock(btn, async () => {
             const engine = document.getElementById('ttsEngine').value;
-            
+
             const config = {
                 engine: engine,
                 edgetts: {
@@ -1303,6 +1305,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             } catch (error) {
                 showAlert('儲存失敗: ' + error.message, 'error');
             }
+            }); // withLock
         }
 
         // ============= 表情選擇 =============
@@ -1402,7 +1405,8 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
         let isInterrupted = false;     // 中斷標誌
 
         // ============= 測試播放 =============
-        async function testSpeak() {
+        async function testSpeak(btn) {
+            await withLock(btn, async () => {
             // 重置中斷標誌
             isInterrupted = false;
             
@@ -1444,6 +1448,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             if (!isAudioPlaying) {
                 await startPlayingQueue();
             }
+            }); // withLock
         }
 
         // ============= 隊列播放控制 =============
@@ -1529,8 +1534,8 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
         }
 
         // 中斷播放
-        async function interruptTTS() {
-            try {
+        async function interruptTTS(btn) {
+            await withLock(btn, async () => { try {
                 // 1. 設置中斷標誌，阻止後續請求
                 isInterrupted = true;
                 
@@ -1555,7 +1560,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             } catch (error) {
                 console.error('中斷播放失敗:', error);
                 showAlert('❌ 中斷失敗: ' + error.message, 'error');
-            }
+            } }); // withLock
         }
 
         function clearTest() {
@@ -1567,14 +1572,14 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
         }
 
         // ============= 表情重置功能 =============
-        async function resetFacialExpression() {
-            try {
+        async function resetFacialExpression(btn) {
+            await withLock(btn, async () => { try {
                 // 僅重置表情，不停止音頻
                 const response = await fetch('/api/reset-expression?stop_audio=false', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
-                
+
                 if (response.ok) {
                     showAlert('✅ 表情已重置！(不影響播放)', 'success');
                 } else {
@@ -1583,7 +1588,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 }
             } catch (error) {
                 showAlert('❌ 重置失敗: ' + error.message, 'error');
-            }
+            } }); // withLock
         }
 
         // ============= 動畫管理 =============
@@ -1715,8 +1720,8 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             ).join('');
         }
 
-        async function saveAnimationConfig() {
-            try {
+        async function saveAnimationConfig(btn) {
+            await withLock(btn, async () => { try {
                 const randomPlayback = document.getElementById('randomPlayback').checked;
 
                 const response = await fetch('/api/animations/config', {
@@ -1737,7 +1742,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 }
             } catch (error) {
                 showAlert('❌ 儲存失敗: ' + error.message, 'error');
-            }
+            } }); // withLock
         }
 
         async function uploadAnimation(input) {
@@ -1788,24 +1793,17 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 return;
             }
 
-            try {
+            const btn = event.currentTarget;
+            await withLock(btn, async () => { try {
                 const response = await fetch('/api/animations/delete', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        id: animationId,
-                        path: animationPath,
-                        type: animationType
-                    })
+                    body: JSON.stringify({ id: animationId, path: animationPath, type: animationType })
                 });
 
                 if (response.ok) {
                     showAlert('✅ 已刪除動畫: ' + animationName, 'success');
-
-                    // 從選中列表移除
                     selectedAnimationIds = selectedAnimationIds.filter(id => id !== animationId);
-
-                    // 重新加載動畫列表
                     await loadAnimationsList();
                 } else {
                     const error = await response.json();
@@ -1813,7 +1811,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 }
             } catch (error) {
                 showAlert('❌ 刪除失敗: ' + error.message, 'error');
-            }
+            } }); // withLock
         }
 
         // ============= 工具函數 =============
@@ -1860,7 +1858,8 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             });
         }
 
-        async function checkYouTubeStatus() {
+        async function checkYouTubeStatus(btn) {
+            await withLock(btn, async () => {
             const box = document.getElementById('ytStatusBox');
             const dot = document.getElementById('ytDot');
             const text = document.getElementById('ytStatusText');
@@ -1916,6 +1915,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 channel.textContent = e.message;
                 return false;
             }
+            }); // withLock
         }
 
         async function uploadClientSecret(input) {
@@ -1937,8 +1937,8 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             input.value = '';
         }
 
-        async function connectYouTube() {
-            try {
+        async function connectYouTube(btn) {
+            await withLock(btn, async () => { try {
                 const res = await fetch(`/api/youtube/auth-url?origin=${encodeURIComponent(window.location.origin)}`);
                 if (!res.ok) {
                     const err = await res.json();
@@ -1950,7 +1950,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 startYtPolling();
             } catch (e) {
                 showAlert('❌ 無法取得授權連結：' + e.message, 'error');
-            }
+            } }); // withLock
         }
 
         function startYtPolling() {
@@ -2064,9 +2064,9 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             document.getElementById('ytConfirmBox').style.display = 'block';
         }
 
-        async function confirmBroadcast() {
+        async function confirmBroadcast(btn) {
             if (!pendingChatId) return;
-            try {
+            await withLock(btn, async () => { try {
                 await fetch('/api/youtube/set-broadcast', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2085,7 +2085,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
                 showAlert('✅ 已綁定直播間：' + selectedBroadcastTitle, 'success');
             } catch (e) {
                 showAlert('❌ 設定失敗：' + e.message, 'error');
-            }
+            } }); // withLock
         }
 
         function cancelPending() {
@@ -2095,7 +2095,8 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             document.getElementById('ytConfirmBox').style.display = 'none';
         }
 
-        async function clearBroadcastSelection() {
+        async function clearBroadcastSelection(btn) {
+            await withLock(btn, async () => {
             await fetch('/api/youtube/set-broadcast', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2106,6 +2107,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             document.querySelectorAll('.broadcast-item').forEach(i => i.classList.remove('selected'));
             updateSelectedInfo();
             showAlert('已清除選定', 'success');
+            }); // withLock
         }
 
         function updateSelectedInfo() {
