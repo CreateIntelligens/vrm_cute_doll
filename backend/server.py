@@ -529,10 +529,25 @@ async def get_indextts_characters():
     except Exception:
         return []
 
+VALID_ENGINES = {"edgetts", "indextts"}
+
 @app.post("/api/tts/config")
 async def update_tts_config(config: TTSConfig):
     """更新 TTS 配置"""
     global tts_config
+
+    if config.engine not in VALID_ENGINES:
+        raise HTTPException(status_code=422, detail=f"無效的 engine，允許值：{sorted(VALID_ENGINES)}")
+
+    if config.indextts and "character" in config.indextts:
+        characters_file = BASE_DIR / "data" / "indextts_characters.json"
+        try:
+            allowed = {c["id"] for c in json.loads(characters_file.read_text(encoding="utf-8"))}
+        except Exception:
+            allowed = set()
+        if allowed and config.indextts["character"] not in allowed:
+            raise HTTPException(status_code=422, detail=f"無效的 character，允許值：{sorted(allowed)}")
+
     tts_config["engine"] = config.engine
     if config.edgetts:
         tts_config["edgetts"] = config.edgetts
