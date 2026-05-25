@@ -720,6 +720,16 @@
                 </div>
             </div>
 
+            <div class="form-group" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+                <label style="min-width:80px;margin:0;">字幕字體大小</label>
+                <input type="range" id="subtitleFontSize" min="8" max="72" step="1" value="18"
+                    oninput="document.getElementById('subtitleFontSizeVal').textContent=this.value"
+                    style="flex:1;min-width:120px;">
+                <span id="subtitleFontSizeVal" style="min-width:32px;text-align:right;">18</span> px
+                <button class="btn btn-secondary" style="padding:6px 14px;font-size:13px;"
+                    onclick="saveSubtitleConfig(this)">套用</button>
+            </div>
+
             <div class="test-panel">
                 <div class="form-group">
                     <label>要說的內容</label>
@@ -2123,13 +2133,38 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
         }
 
         // ============= 初始化修改 =============
+        async function saveSubtitleConfig(btn) {
+            await withLock(btn, async () => {
+                const fontSize = parseInt(document.getElementById('subtitleFontSize').value);
+                try {
+                    const res = await fetch('/api/subtitle/config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ fontSize })
+                    });
+                    if (res.ok) showAlert(`字幕字體大小已設為 ${fontSize}px`, 'success');
+                    else showAlert('套用失敗', 'error');
+                } catch (e) {
+                    showAlert('套用失敗：' + e.message, 'error');
+                }
+            });
+        }
+
         async function init() {
             await loadVRMList();
             await loadCurrentVRM();
             await loadTTSConfig();
-            await loadAnimationsList();  // 加載動畫列表
+            await loadAnimationsList();
             setupExpressionButtons();
-            setupRandomPlaybackToggle();  // 設置隨機播放開關監聽
+            setupRandomPlaybackToggle();
+            // 讀取已儲存的字幕字體大小
+            fetch('/api/vrm/config').then(r => r.json()).then(d => {
+                const size = d.VRMConfig?.subtitleFontSize;
+                if (size) {
+                    document.getElementById('subtitleFontSize').value = size;
+                    document.getElementById('subtitleFontSizeVal').textContent = size;
+                }
+            }).catch(() => {});
         }
 
         // 啟動

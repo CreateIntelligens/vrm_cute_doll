@@ -815,8 +815,25 @@ async def update_animation_config(config_data: dict):
 @app.get("/api/vrm/config")
 async def get_vrm_config():
     """獲取完整的 VRM 配置（給前端使用）"""
-    # 返回真實的配置，包括用戶選中的動畫
     return {"VRMConfig": vrm_config}
+
+# ============= Subtitle Config API =============
+
+class SubtitleConfig(BaseModel):
+    fontSize: int
+
+@app.post("/api/subtitle/config")
+async def update_subtitle_config(config: SubtitleConfig):
+    """更新字幕字體大小並即時推播給 vrm.html"""
+    if not (8 <= config.fontSize <= 72):
+        raise HTTPException(status_code=422, detail="fontSize 須介於 8 ~ 72")
+    vrm_config["subtitleFontSize"] = config.fontSize
+    save_config(vrm_config)
+    await broadcast_to_vrm({
+        "type": "subtitle_config",
+        "data": {"fontSize": config.fontSize}
+    })
+    return {"success": True, "fontSize": config.fontSize}
 
 # ============= Reset Expression API =============
 

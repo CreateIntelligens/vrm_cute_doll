@@ -213,6 +213,12 @@
             // 字幕拖曳功能
             initSubtitleDrag();
 
+            // 從 config 載入字幕字體大小
+            fetch('/api/vrm/config').then(r => r.json()).then(d => {
+                const size = d.VRMConfig?.subtitleFontSize;
+                if (size) subtitleElement.style.fontSize = size + 'px';
+            }).catch(() => {});
+
             // 響應式
             window.addEventListener('resize', onWindowResize);
         }
@@ -425,9 +431,10 @@
                     } else if (message.type === 'play_animation') {
                         console.log('動畫功能暫時不可用');
                     } else if (message.type === 'config_updated') {
-                        // 🔧 新增：配置更新通知
                         console.log('🔄 Animation config updated, reloading...');
                         await reloadAnimationConfiguration();
+                    } else if (message.type === 'subtitle_config') {
+                        if (message.data?.fontSize) subtitleElement.style.fontSize = message.data.fontSize + 'px';
                     }
                 } catch (error) {
                     console.error('🔊 [ERROR] Error handling WebSocket message:', error);
