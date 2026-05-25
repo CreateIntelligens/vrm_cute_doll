@@ -50,5 +50,6 @@
       "type": "default"
     }
   ],
-  "userMotions": []
+  "userMotions": [],
+  "subtitleFontSize": 18
 }
