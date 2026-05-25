@@ -820,20 +820,27 @@ async def get_vrm_config():
 # ============= Subtitle Config API =============
 
 class SubtitleConfig(BaseModel):
-    fontSize: int
+    fontSize: Optional[int] = None
+    width: Optional[int] = None
 
 @app.post("/api/subtitle/config")
 async def update_subtitle_config(config: SubtitleConfig):
-    """更新字幕字體大小並即時推播給 vrm.html"""
-    if not (8 <= config.fontSize <= 72):
-        raise HTTPException(status_code=422, detail="fontSize 須介於 8 ~ 72")
-    vrm_config["subtitleFontSize"] = config.fontSize
-    save_config(vrm_config)
-    await broadcast_to_vrm({
-        "type": "subtitle_config",
-        "data": {"fontSize": config.fontSize}
-    })
-    return {"success": True, "fontSize": config.fontSize}
+    """更新字幕設定並即時推播給 vrm.html"""
+    data = {}
+    if config.fontSize is not None:
+        if not (8 <= config.fontSize <= 72):
+            raise HTTPException(status_code=422, detail="fontSize 須介於 8 ~ 72")
+        vrm_config["subtitleFontSize"] = config.fontSize
+        data["fontSize"] = config.fontSize
+    if config.width is not None:
+        if not (10 <= config.width <= 100):
+            raise HTTPException(status_code=422, detail="width 須介於 10 ~ 100")
+        vrm_config["subtitleWidth"] = config.width
+        data["width"] = config.width
+    if data:
+        save_config(vrm_config)
+        await broadcast_to_vrm({"type": "subtitle_config", "data": data})
+    return {"success": True, **data}
 
 # ============= Reset Expression API =============
 

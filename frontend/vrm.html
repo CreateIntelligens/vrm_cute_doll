@@ -213,10 +213,11 @@
             // 字幕拖曳功能
             initSubtitleDrag();
 
-            // 從 config 載入字幕字體大小
+            // 從 config 載入字幕設定
             fetch('/api/vrm/config').then(r => r.json()).then(d => {
-                const size = d.VRMConfig?.subtitleFontSize;
-                if (size) subtitleElement.style.fontSize = size + 'px';
+                const cfg = d.VRMConfig;
+                if (cfg?.subtitleFontSize) subtitleElement.style.fontSize = cfg.subtitleFontSize + 'px';
+                if (cfg?.subtitleWidth) subtitleElement.style.maxWidth = cfg.subtitleWidth + '%';
             }).catch(() => {});
 
             // 響應式
@@ -435,6 +436,7 @@
                         await reloadAnimationConfiguration();
                     } else if (message.type === 'subtitle_config') {
                         if (message.data?.fontSize) subtitleElement.style.fontSize = message.data.fontSize + 'px';
+                        if (message.data?.width) subtitleElement.style.maxWidth = message.data.width + '%';
                     }
                 } catch (error) {
                     console.error('🔊 [ERROR] Error handling WebSocket message:', error);

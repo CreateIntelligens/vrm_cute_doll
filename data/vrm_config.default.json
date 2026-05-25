@@ -51,5 +51,6 @@
     }
   ],
   "userMotions": [],
-  "subtitleFontSize": 18
+  "subtitleFontSize": 18,
+  "subtitleWidth": 80
 }

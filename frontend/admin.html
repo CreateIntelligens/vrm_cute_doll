@@ -727,7 +727,16 @@
                     style="flex:1;min-width:120px;">
                 <span id="subtitleFontSizeVal" style="min-width:32px;text-align:right;">18</span> px
                 <button class="btn btn-secondary" style="padding:6px 14px;font-size:13px;"
-                    onclick="saveSubtitleConfig(this)">套用</button>
+                    onclick="saveSubtitleFontSize(this)">套用</button>
+            </div>
+            <div class="form-group" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+                <label style="min-width:80px;margin:0;">字幕框寬度</label>
+                <input type="range" id="subtitleWidth" min="10" max="100" step="5" value="80"
+                    oninput="document.getElementById('subtitleWidthVal').textContent=this.value"
+                    style="flex:1;min-width:120px;">
+                <span id="subtitleWidthVal" style="min-width:32px;text-align:right;">80</span> %
+                <button class="btn btn-secondary" style="padding:6px 14px;font-size:13px;"
+                    onclick="saveSubtitleWidth(this)">套用</button>
             </div>
 
             <div class="test-panel">
@@ -2132,8 +2141,7 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             }
         }
 
-        // ============= 初始化修改 =============
-        async function saveSubtitleConfig(btn) {
+        async function saveSubtitleFontSize(btn) {
             await withLock(btn, async () => {
                 const fontSize = parseInt(document.getElementById('subtitleFontSize').value);
                 try {
@@ -2150,6 +2158,23 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             });
         }
 
+        async function saveSubtitleWidth(btn) {
+            await withLock(btn, async () => {
+                const width = parseInt(document.getElementById('subtitleWidth').value);
+                try {
+                    const res = await fetch('/api/subtitle/config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ width })
+                    });
+                    if (res.ok) showAlert(`字幕框寬度已設為 ${width}%`, 'success');
+                    else showAlert('套用失敗', 'error');
+                } catch (e) {
+                    showAlert('套用失敗：' + e.message, 'error');
+                }
+            });
+        }
+
         async function init() {
             await loadVRMList();
             await loadCurrentVRM();
@@ -2157,12 +2182,15 @@ curl -X POST http://localhost:5456/api/reset-expression</pre>
             await loadAnimationsList();
             setupExpressionButtons();
             setupRandomPlaybackToggle();
-            // 讀取已儲存的字幕字體大小
             fetch('/api/vrm/config').then(r => r.json()).then(d => {
-                const size = d.VRMConfig?.subtitleFontSize;
-                if (size) {
-                    document.getElementById('subtitleFontSize').value = size;
-                    document.getElementById('subtitleFontSizeVal').textContent = size;
+                const cfg = d.VRMConfig;
+                if (cfg?.subtitleFontSize) {
+                    document.getElementById('subtitleFontSize').value = cfg.subtitleFontSize;
+                    document.getElementById('subtitleFontSizeVal').textContent = cfg.subtitleFontSize;
+                }
+                if (cfg?.subtitleWidth) {
+                    document.getElementById('subtitleWidth').value = cfg.subtitleWidth;
+                    document.getElementById('subtitleWidthVal').textContent = cfg.subtitleWidth;
                 }
             }).catch(() => {});
         }
